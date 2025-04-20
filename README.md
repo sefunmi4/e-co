@@ -1,2 +1,2 @@
 # e-co
-OS configuration for recycled device hybrid server network
+nixos configs for the recycled device cross-platform lab
