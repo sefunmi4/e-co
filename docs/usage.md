@@ -21,6 +21,14 @@ This guide explains how to set up a development environment for EtherOS.
 
 The application will be available at `http://localhost:5173` by default.
 
+### Runtime Library
+
+The `runtime/` package contains shared gesture and command logic. Run tests with:
+
+```bash
+npm test -w runtime
+```
+
 ## Building the NixOS Layer
 
 1. Enter the `nixos` directory:
@@ -61,3 +69,10 @@ cmake --build build
 ```
 
 The application opens a basic Qt window saying "Hello EtherOS".
+
+## Custom Environments
+
+Modify `shared/environments.json` to add or remove scenes. During development
+the web app imports this file directly so changes appear on refresh. Provide the
+referenced images in `web/public/`.
+

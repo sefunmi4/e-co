@@ -19,6 +19,13 @@ EtherOS combines a minimal NixOS layer with a browser-based desktop UI. The goal
 3. The runtime communicates with the NixOS layer to execute system-level tasks or file operations.
 4. Updates are reflected back in the web UI in real time.
 
+## Multi-platform Targets
+
+EtherOS builds are defined through Nix flakes. Example configurations exist for a
+headless **server** image and a graphical **desktop** image. Future work will
+extend the runtime to mobile and wearable clients using React Native so that the
+same command APIs operate everywhere.
+
 ## Future Work
 
 This architecture will evolve as we integrate real SymbolCast input and additional modules. Contributions and feedback are welcome.

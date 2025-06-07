@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/copy-env.js",
+    "prebuild": "node scripts/copy-env.js",
+    "pretest": "node scripts/copy-env.js",
     "dev": "vite",
     "build": "vite build",
     "test": "vitest"

@@ -64,7 +64,8 @@ cmake --build build
 ```
 
 ### Environment Assets
-The sample environments expect images such as `forest.jpg`, `chamber.jpg`, and `island.jpg` in `web/public/`. These backgrounds are not stored in version control; generate or provide your own 3D landscapes to use them.
+The list of available environments lives in `shared/environments.json`. Add your own entries there and provide matching background images in `web/public/`. Images such as `forest.jpg`, `chamber.jpg`, and `island.jpg` are user supplied and ignored by Git.
+
 
 
 

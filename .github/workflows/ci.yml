@@ -1,0 +1,17 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm test -w web --if-present
+      - run: npm test -w runtime --if-present
+      - run: nix build .#packages.x86_64-linux --accept-flake-config
+        if: runner.os == 'Linux'

@@ -19,5 +19,6 @@ This document tracks the planned milestones for the EtherOS MVP.
 - [ ] Expand module system for additional features
 - [ ] Improve performance and cross-device syncing
 - [ ] Document deployment and contribution guidelines
+- [ ] Mobile & wearable builds using React Native
 
 The roadmap may evolve as the project progresses. Community feedback is encouraged.
