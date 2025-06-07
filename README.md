@@ -33,12 +33,27 @@ nixos/example/   → Small Qt demo showing a native window
 
 ## ⚙️ Getting Started
 
+### Prerequisites
+
+EtherOS relies on the [Nix package manager](https://nixos.org/download.html).
+Install Nix with flakes enabled before building any part of the project.
+
+
 ### 🔹 Run the Web Version
 ```bash
 cd web
 npm install
 npm run dev
 ```
+
+### 🔹 Build the Runtime Library
+
+The runtime package compiles TypeScript sources to `dist/`. Build it with:
+
+```bash
+npm run build -w runtime
+```
+The compiled library can then be consumed from `runtime/dist`.
 
 ### 🔹 Build NixOS Layer
 
@@ -65,8 +80,6 @@ cmake --build build
 
 ### Environment Assets
 The list of available environments lives in `shared/environments.json`. Add your own entries there and provide matching background images in `web/public/`. Images such as `forest.jpg`, `chamber.jpg`, and `island.jpg` are user supplied and ignored by Git.
-
-
 
 
 ---

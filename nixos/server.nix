@@ -2,5 +2,9 @@
 {
   imports = [ ./module.nix ];
   services.xserver.enable = false;
-  # TODO: add headless server services
+
+  services.openssh.enable = true;
+  networking.firewall.allowedTCPPorts = [ 22 80 ];
+  services.nginx.enable = true;
+  environment.systemPackages = [ pkgs.git ];
 }

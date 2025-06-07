@@ -1,4 +1,17 @@
 {
   "private": true,
-  "workspaces": ["web", "runtime"]
+  "workspaces": [
+    "web",
+    "runtime"
+  ],
+  "scripts": {
+    "lint": "eslint \"**/*.{ts,tsx}\" --max-warnings=0",
+    "test": "vitest run -w web && vitest run -w runtime"
+  },
+  "devDependencies": {
+    "eslint": "^8.56.0",
+    "@typescript-eslint/parser": "^6.7.0",
+    "@typescript-eslint/eslint-plugin": "^6.7.0",
+    "vitest": "^1.6.1"
+  }
 }
