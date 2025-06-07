@@ -1,5 +1,8 @@
-{ pkgs ? import <nixpkgs> {} }:
-
+{ system ? builtins.currentSystem }:
+let
+  flake = builtins.getFlake (toString ../.);
+  pkgs = import flake.inputs.nixpkgs { inherit system; };
+in
 pkgs.mkShell {
   buildInputs = [
     pkgs.nixos-rebuild
