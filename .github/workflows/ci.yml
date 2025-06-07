@@ -1,0 +1,19 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 20
+      - run: npm ci --workspaces
+      - run: npx vitest run --config web/vitest.config.ts
+      - run: npx vitest run -w runtime
+      - uses: cachix/install-nix-action@v22
+        with:
+          nix_path: nixpkgs=channel:nixos-23.11
+      - run: nix build .#packages.x86_64-linux --accept-flake-config
