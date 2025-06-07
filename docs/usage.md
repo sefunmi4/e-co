@@ -45,3 +45,19 @@ nix build .#iso
 ```
 
 The resulting image can be flashed to a USB drive for quick installation.
+
+## Building the Qt Example
+
+A small Qt demo is provided under `nixos/example` to verify the development
+environment. Use the Nix shell so that CMake and Qt are available:
+
+```bash
+cd nixos
+nix develop  # provides CMake and Qt
+cd example
+cmake -B build
+cmake --build build
+./build/etheros-example
+```
+
+The application opens a basic Qt window saying "Hello EtherOS".
