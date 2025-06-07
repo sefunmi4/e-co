@@ -75,3 +75,4 @@ The application opens a basic Qt window saying "Hello EtherOS".
 Modify `shared/environments.json` to add or remove scenes. During development
 the web app imports this file directly so changes appear on refresh. Provide the
 referenced images in `web/public/`.
+
