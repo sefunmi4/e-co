@@ -3,6 +3,8 @@ import ReactDOM from 'react-dom/client';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
+import EnvManager from './components/EnvManager';
+import LauncherMenu from './components/LauncherMenu';
 
 function Landscape() {
   const geom = useMemo(() => {
@@ -67,9 +69,13 @@ function Scene() {
 }
 
 const App = () => (
-  <Canvas className="w-screen h-screen bg-black">
-    <Scene />
-  </Canvas>
+  <div className="w-screen h-screen relative overflow-hidden">
+    <Canvas className="w-full h-full bg-black">
+      <Scene />
+    </Canvas>
+    <EnvManager />
+    <LauncherMenu />
+  </div>
 );
 
 ReactDOM.createRoot(document.getElementById('root')!).render(<App />);
