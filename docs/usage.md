@@ -34,3 +34,14 @@ The application will be available at `http://localhost:5173` by default.
    ```
 
 This will apply the configuration to your machine. Use caution when running on a non-test system.
+
+## Creating a Bootable ISO
+
+To experiment on other hardware, you can build a bootable ISO:
+
+```bash
+cd nixos
+nix build .#iso
+```
+
+The resulting image can be flashed to a USB drive for quick installation.

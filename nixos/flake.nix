@@ -11,5 +11,11 @@
         inherit system;
         modules = [ ./module.nix ];
       };
+
+      packages.${system}.iso =
+        (pkgs.nixos {
+          inherit system;
+          modules = [ ./module.nix ];
+        }).config.system.build.isoImage;
     };
 }

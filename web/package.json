@@ -8,7 +8,10 @@
   },
   "dependencies": {
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "three": "^0.160.0",
+    "@react-three/fiber": "^8.14.5",
+    "@react-three/drei": "^9.86.5"
   },
   "devDependencies": {
     "@types/react": "^18.0.28",
