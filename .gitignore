@@ -1,0 +1,15 @@
+# Node modules
+node_modules/
+# Build outputs
+**/dist/
+# Logs
+npm-debug.log*
+# IDE/editor directories
+.vscode/
+.DS_Store
+# OS images
+*.iso
+
+# Generated environment images
+web/public/*.jpg
+

@@ -25,6 +25,7 @@ nixos/     → Flake + overlays for NixOS DE setup
 web/       → Web version of EtherOS UI (React + Tailwind + Three.js)
 runtime/   → Shared SymbolCast + state logic
 docs/      → Architecture, usage, and planning docs
+nixos/example/   → Small Qt demo showing a native window
 ```
 
 
@@ -47,6 +48,24 @@ cd nixos
 nix develop
 nixos-rebuild switch --flake .
 ```
+
+### 🔹 Build the Qt Example
+
+An example Qt application lives in `nixos/example` to verify the native build
+toolchain. From within the Nix shell run:
+
+```bash
+cd nixos
+nix develop
+cd example
+cmake -B build
+cmake --build build
+./build/etheros-example
+```
+
+### Environment Assets
+The sample environments expect images such as `forest.jpg`, `chamber.jpg`, and `island.jpg` in `web/public/`. These backgrounds are not stored in version control; generate or provide your own 3D landscapes to use them.
+
 
 
 ---
