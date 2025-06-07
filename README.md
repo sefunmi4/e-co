@@ -82,7 +82,6 @@ cmake --build build
 The list of available environments lives in `shared/environments.json`. Add your own entries there and provide matching background images in `web/public/`. Images such as `forest.jpg`, `chamber.jpg`, and `island.jpg` are user supplied and ignored by Git.
 
 
-
 ---
 
 ## 🌌 MVP Features (WIP)
