@@ -25,6 +25,7 @@ nixos/     → Flake + overlays for NixOS DE setup
 web/       → Web version of EtherOS UI (React + Tailwind + Three.js)
 runtime/   → Shared SymbolCast + state logic
 docs/      → Architecture, usage, and planning docs
+nixos/example/   → Small Qt demo showing a native window
 ```
 
 
@@ -32,12 +33,27 @@ docs/      → Architecture, usage, and planning docs
 
 ## ⚙️ Getting Started
 
+### Prerequisites
+
+EtherOS relies on the [Nix package manager](https://nixos.org/download.html).
+Install Nix with flakes enabled before building any part of the project.
+
+
 ### 🔹 Run the Web Version
 ```bash
 cd web
 npm install
 npm run dev
 ```
+
+### 🔹 Build the Runtime Library
+
+The runtime package compiles TypeScript sources to `dist/`. Build it with:
+
+```bash
+npm run build -w runtime
+```
+The compiled library can then be consumed from `runtime/dist`.
 
 ### 🔹 Build NixOS Layer
 
@@ -47,6 +63,31 @@ cd nixos
 nix develop
 nixos-rebuild switch --flake .
 ```
+
+### 🔹 Build the Qt Example
+
+An example Qt application lives in `nixos/example` to verify the native build
+toolchain. From within the Nix shell run:
+
+```bash
+cd nixos
+nix develop
+cd example
+cmake -B build
+cmake --build build
+./build/etheros-example
+```
+
+You can also compile the demo with a single command using the Nix flake:
+
+```bash
+nix build .#packages.$(nix eval --impure --raw --expr 'builtins.currentSystem').qtExample
+./result/bin/etheros-example
+```
+
+### Environment Assets
+The list of available environments lives in `shared/environments.json`. Add your own entries there and provide matching background images in `web/public/`. Images such as `forest.jpg`, `chamber.jpg`, and `island.jpg` are user supplied and ignored by Git.
+
 
 
 ---
