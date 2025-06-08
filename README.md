@@ -77,6 +77,12 @@ cmake -B build
 cmake --build build
 ./build/etheros-example
 ```
+You can also compile the demo with a single command using the Nix flake:
+
+```bash
+nix build .#packages.$(nix eval --impure --raw --expr 'builtins.currentSystem').qtExample
+./result/bin/etheros-example
+```
 
 ### Environment Assets
 The list of available environments lives in `shared/environments.json`. Add your own entries there and provide matching background images in `web/public/`. Images such as `forest.jpg`, `chamber.jpg`, and `island.jpg` are user supplied and ignored by Git.

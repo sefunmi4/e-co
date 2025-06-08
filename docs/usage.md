@@ -68,6 +68,13 @@ cmake --build build
 ./build/etheros-example
 ```
 
+Alternatively you can build using the flake output:
+
+```bash
+nix build ../#packages.$(nix eval --impure --raw --expr 'builtins.currentSystem').qtExample
+./result/bin/etheros-example
+```
+
 The application opens a basic Qt window saying "Hello EtherOS".
 
 ## Custom Environments

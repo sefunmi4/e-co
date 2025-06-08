@@ -14,10 +14,14 @@
 
       packages = forAllSystems (system:
         let pkgs = import nixpkgs { inherit system; };
-        in (pkgs.nixos {
-          inherit system;
-          modules = [ ./module.nix ];
-        }).config.system.build.isoImage);
+            iso = (pkgs.nixos {
+              inherit system;
+              modules = [ ./module.nix ];
+            }).config.system.build.isoImage;
+        in {
+          isoImage = iso;
+          qtExample = pkgs.callPackage ./example { };
+        });
 
       # Example specialized builds
       nixosConfigurations.server = nixpkgs.lib.nixosSystem {

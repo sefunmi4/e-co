@@ -11,6 +11,7 @@ EtherOS combines a minimal NixOS layer with a browser-based desktop UI. The goal
 - **NixOS Layer** — Provides the base operating system and system services. The configuration is defined through flakes for reproducibility.
 - **Web UI** — A React + Tailwind web application that renders the desktop environment in the browser. This allows remote access and easy iteration.
 - **Runtime** — Shared logic for gestures, commands and state synchronization between the OS layer and the web interface.
+- **Qt Example** — A small C++/Qt program (compatible with Q++) used to validate native tooling.
 
 ## Data Flow
 

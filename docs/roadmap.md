@@ -20,5 +20,7 @@ This document tracks the planned milestones for the EtherOS MVP.
 - [ ] Improve performance and cross-device syncing
 - [ ] Document deployment and contribution guidelines
 - [ ] Mobile & wearable builds using React Native
+- [ ] Verify Qt (Q++) example builds across platforms
+
 
 The roadmap may evolve as the project progresses. Community feedback is encouraged.

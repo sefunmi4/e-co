@@ -13,4 +13,6 @@ npm-debug.log*
 # Generated environment images
 web/public/*.jpg
 web/public/environments.json
+nixos/example/build/
+result
 
