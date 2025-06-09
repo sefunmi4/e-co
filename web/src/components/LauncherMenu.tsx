@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { info } from '../logger';
 
 const apps = [
   { name: 'Terminal', action: () => alert('Terminal launching...') },
@@ -13,7 +14,10 @@ export default function LauncherMenu() {
     <div className="absolute bottom-4 left-4">
       <button
         className="bg-gray-800 text-white px-3 py-2 rounded"
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          setOpen(!open);
+          info(`Launcher menu ${!open ? 'opened' : 'closed'}`);
+        }}
       >
         Start
       </button>
@@ -27,7 +31,10 @@ export default function LauncherMenu() {
             {apps.map((app) => (
               <li key={app.name}>
                 <button
-                  onClick={app.action}
+                  onClick={() => {
+                    info(`Launching ${app.name}`);
+                    app.action();
+                  }}
                   className="w-full text-left px-1 py-0.5 hover:bg-gray-100"
                 >
                   {app.name}
