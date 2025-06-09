@@ -1,4 +1,5 @@
 import React, { useRef, useMemo, useEffect, useState } from 'react';
+import { info } from './logger';
 import ReactDOM from 'react-dom/client';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
@@ -78,4 +79,5 @@ const App = () => (
   </div>
 );
 
+info('Starting web application');
 ReactDOM.createRoot(document.getElementById('root')!).render(<App />);

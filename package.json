@@ -6,7 +6,7 @@
   ],
   "scripts": {
     "lint": "eslint \"**/*.{ts,tsx}\" --max-warnings=0",
-    "test": "vitest run -w web && vitest run -w runtime"
+    "test": "vitest run --config web/vitest.config.ts && vitest run runtime"
   },
   "devDependencies": {
     "eslint": "^8.56.0",

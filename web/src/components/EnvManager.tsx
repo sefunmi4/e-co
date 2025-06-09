@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { info, error } from '../logger';
 
 interface Environment {
   id: string;
@@ -15,9 +16,14 @@ export default function EnvManager() {
   );
 
   useEffect(() => {
+    info('Fetching environments');
     fetch('/environments.json')
       .then((res) => res.json())
-      .then((data) => setEnvs(data));
+      .then((data) => {
+        info('Loaded environments', data);
+        setEnvs(data);
+      })
+      .catch((err) => error('Failed to load environments', err));
   }, []);
 
   const switchEnv = (id: string, bg: string) => {
@@ -25,6 +31,7 @@ export default function EnvManager() {
     localStorage.setItem(ENV_KEY, id);
     document.body.style.backgroundImage = `url(${bg})`;
     document.body.style.backgroundSize = 'cover';
+    info(`Switched environment to ${id}`);
   };
 
   return (
