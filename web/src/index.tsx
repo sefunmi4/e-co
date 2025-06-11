@@ -6,6 +6,8 @@ import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import EnvManager from './components/EnvManager';
 import LauncherMenu from './components/LauncherMenu';
+import CommandPalette from './components/CommandPalette';
+import ModelDashboard from './components/ModelDashboard';
 
 function Landscape() {
   const geom = useMemo(() => {
@@ -76,6 +78,8 @@ const App = () => (
     </Canvas>
     <EnvManager />
     <LauncherMenu />
+    <CommandPalette />
+    <ModelDashboard />
   </div>
 );
 
