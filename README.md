@@ -96,6 +96,8 @@ The list of available environments lives in `shared/environments.json`. Add your
 	•	SymbolCast input (mock gestures + voice)
 	•	NixOS flake for personal DE boot
 	•	Shared command & file system logic
+	•       Voice-enabled command palette
+	•       Local AI model dashboard
 
 ---
 

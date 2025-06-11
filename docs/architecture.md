@@ -12,6 +12,8 @@ EtherOS combines a minimal NixOS layer with a browser-based desktop UI. The goal
 - **Web UI** — A React + Tailwind web application that renders the desktop environment in the browser. This allows remote access and easy iteration.
 - **Runtime** — Shared logic for gestures, commands and state synchronization between the OS layer and the web interface.
 - **Qt Example** — A small C++/Qt program (compatible with Q++) used to validate native tooling.
+- **AI Command Layer** — Provides voice, symbol and gesture triggers that dispatch commands to the runtime. A command palette UI offers quick access to common actions.
+- **Model Dashboard** — A local interface for starting and stopping AI models that run on the server without cloud dependencies.
 
 ## Data Flow
 
@@ -29,4 +31,4 @@ same command APIs operate everywhere.
 
 ## Future Work
 
-This architecture will evolve as we integrate real SymbolCast input and additional modules. Contributions and feedback are welcome.
+This architecture will evolve as we integrate real SymbolCast input and additional modules. Local inference is preferred for privacy, with an option to fall back to online models when enabled. Contributions and feedback are welcome.
