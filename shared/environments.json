@@ -1,5 +1,6 @@
 [
   { "id": "rainforest", "name": "Rainforest", "background": "forest.jpg" },
   { "id": "36chambers", "name": "36 Chambers", "background": "chamber.jpg" },
-  { "id": "island", "name": "Island", "background": "island.jpg" }
+  { "id": "island", "name": "Island", "background": "island.jpg" },
+  { "id": "terrain", "name": "Procedural Terrain", "module": "/src/components/ProceduralBackground.tsx" }
 ]

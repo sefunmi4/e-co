@@ -30,7 +30,11 @@ function Terrain() {
 
 export default function ProceduralBackground() {
   return (
-    <Canvas className="fixed inset-0 -z-10">
+    <Canvas
+      className="fixed inset-0 -z-20"
+      gl={{ alpha: true }}
+      style={{ background: 'transparent' }}
+    >
       <ambientLight intensity={0.4} />
       <directionalLight position={[5, 10, 5]} />
       <Terrain />

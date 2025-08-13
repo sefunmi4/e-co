@@ -6,16 +6,24 @@ import LauncherMenu from './components/LauncherMenu';
 import CommandPalette from './components/CommandPalette';
 import ModelDashboard from './components/ModelDashboard';
 import ProceduralBackground from './components/ProceduralBackground';
+import ForegroundOverlay from './components/ForegroundOverlay';
 
-const App = () => (
-  <div className="w-screen h-screen relative overflow-hidden">
-    <ProceduralBackground />
-    <EnvManager />
-    <LauncherMenu />
-    <CommandPalette />
-    <ModelDashboard />
-  </div>
-);
+const App = () => {
+  const [World, setWorld] = React.useState<React.ComponentType | null>(
+    () => ProceduralBackground
+  );
+
+  return (
+    <div className="w-screen h-screen relative overflow-hidden">
+      {World && <World />}
+      <ForegroundOverlay />
+      <EnvManager onWorldChange={setWorld} />
+      <LauncherMenu />
+      <CommandPalette />
+      <ModelDashboard />
+    </div>
+  );
+};
 
 info('Starting web application');
 ReactDOM.createRoot(document.getElementById('root')!).render(<App />);
