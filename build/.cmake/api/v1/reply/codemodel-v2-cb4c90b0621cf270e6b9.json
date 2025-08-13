@@ -1,0 +1,78 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"jsonFile" : "directory-.-Debug-f5ebdc15457944623624.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.16"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "etheros-example",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "etheros-example::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-etheros-example-Debug-71d6e0ada2e71e02ab4a.json",
+					"name" : "etheros-example",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "etheros-example_autogen::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-etheros-example_autogen-Debug-07e3ec45bb4d4c58800e.json",
+					"name" : "etheros-example_autogen",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "etheros-example_autogen_timestamp_deps::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-etheros-example_autogen_timestamp_deps-Debug-d81659b5de036e026120.json",
+					"name" : "etheros-example_autogen_timestamp_deps",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/Users/oluwaseunfunmiashiru/Dev/e-co/build",
+		"source" : "/Users/oluwaseunfunmiashiru/Dev/e-co/examples/desktop"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 8
+	}
+}
