@@ -1,5 +1,0 @@
-cmake_minimum_required(VERSION 3.20)
-project(etheros-example)
-find_package(Qt6 REQUIRED COMPONENTS Widgets)
-add_executable(etheros-example main.cpp)
-target_link_libraries(etheros-example PRIVATE Qt6::Widgets)

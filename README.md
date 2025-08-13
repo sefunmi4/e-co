@@ -3,7 +3,7 @@
 EtherOS is a next-gen modular desktop environment built for immersive computing, symbolic input, and decentralized session portability.
 
 This repo contains:
-- A **NixOS-based desktop environment layer**
+- A **cross-platform desktop environment layer**
 - A **browser-accessible web interface**
 - A shared runtime system for gestures, state, and command handling
 
@@ -11,7 +11,7 @@ This repo contains:
 
 ## 🚀 Goals
 
-- Create a lightweight, declarative desktop layer on top of NixOS
+- Create a lightweight, declarative desktop layer for Linux, macOS, and Windows
 - Simulate VR/immersive computing with SymbolCast input (gestures & voice)
 - Use devices as personal cloud mesh nodes (e.g., headless laptops)
 - Offer browser-based access for testing, collaboration, and mobile users
@@ -21,11 +21,11 @@ This repo contains:
 ## 📁 Structure
 
 ```plaintext
-nixos/     → Flake + overlays for NixOS DE setup
-web/       → Web version of EtherOS UI (React + Tailwind + Three.js)
-runtime/   → Shared SymbolCast + state logic
-docs/      → Architecture, usage, and planning docs
-nixos/example/   → Small Qt demo showing a native window
+nixos/             → Legacy NixOS configuration
+examples/desktop/  → Qt demo with layered windows and network sync
+web/               → Web version of EtherOS UI (React + Tailwind + Three.js)
+runtime/           → Shared SymbolCast + state logic
+docs/              → Architecture, usage, and planning docs
 ```
 
 
@@ -35,8 +35,8 @@ nixos/example/   → Small Qt demo showing a native window
 
 ### Prerequisites
 
-EtherOS relies on the [Nix package manager](https://nixos.org/download.html).
-Install Nix with flakes enabled before building any part of the project.
+Install [Node.js](https://nodejs.org/) and a Qt6 development environment
+with CMake to build the desktop example and web interface.
 
 
 ### 🔹 Run the Web Version
@@ -55,33 +55,18 @@ npm run build -w runtime
 ```
 The compiled library can then be consumed from `runtime/dist`.
 
-### 🔹 Build NixOS Layer
-
-You must have Nix + flakes enabled.
-```bash
-cd nixos
-nix develop
-nixos-rebuild switch --flake .
-```
-
 ### 🔹 Build the Qt Example
 
-An example Qt application lives in `nixos/example` to verify the native build
-toolchain. From within the Nix shell run:
+An example Qt application lives in `examples/desktop` to verify the native
+build toolchain. It showcases background, middle, and foreground layers with a
+small control panel to choose the interactive layer and UDP-based network
+sync. Build it with:
 
 ```bash
-cd nixos
-nix develop
-cd example
+cd examples/desktop
 cmake -B build
 cmake --build build
 ./build/etheros-example
-```
-You can also compile the demo with a single command using the Nix flake:
-
-```bash
-nix build .#packages.$(nix eval --impure --raw --expr 'builtins.currentSystem').qtExample
-./result/bin/etheros-example
 ```
 
 ### Environment Assets
@@ -91,22 +76,18 @@ The list of available environments lives in `shared/environments.json`. Add your
 ---
 
 ## 🌌 MVP Features (WIP)
-	•	Modular folder structure
-	•	Basic desktop layout in web
-	•	SymbolCast input (mock gestures + voice)
-	•	NixOS flake for personal DE boot
-	•	Shared command & file system logic
-	•       Voice-enabled command palette
-	•       Local AI model dashboard
-
----
+- Modular folder structure
+- Basic desktop layout in web
+- SymbolCast input (mock gestures + voice)
+- Cross-platform build scripts
+- Shared command & file system logic
+- Voice-enabled command palette
+- Local AI model dashboard
 
 ## 📚 Documentation
-	•	docs/architecture.md – Full system vision
-	•	docs/roadmap.md – MVP goals + phases
-	•	docs/usage.md – Dev setup for Nix & Web
-
----
+- docs/architecture.md – Full system vision
+- docs/roadmap.md – MVP goals + phases
+- docs/usage.md – Dev setup for desktop & web
 
 ## 🤝 Contributing
 
