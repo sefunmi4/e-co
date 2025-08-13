@@ -69,6 +69,27 @@ cmake --build build
 ./build/etheros-example
 ```
 
+### 🔹 Run the Desktop Application
+
+The demo desktop environment pulls together three interactive pieces:
+
+1. **VR-style polygon background** that you can walk through.
+2. **Window controls** to switch backgrounds and enable gesture drawing.
+3. **SymbolCast cursor** for drawing gestures on a track pad and mapping them to commands.
+
+Start everything from the repo root with:
+
+```bash
+npm run build -w runtime
+cd examples/desktop
+cmake -B build
+cmake --build build
+./build/etheros-example
+```
+
+Use the control window to pick scenes and toggle gesture mode. When gestures
+are active, draw with your cursor to trigger SymbolCast command mappings.
+
 ### Environment Assets
 The list of available environments lives in `shared/environments.json`. Add your own entries there and provide matching background images in `web/public/`. Images such as `forest.jpg`, `chamber.jpg`, and `island.jpg` are user supplied and ignored by Git.
 
