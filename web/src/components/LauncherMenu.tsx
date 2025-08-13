@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { info } from '../logger';
+import Window from './Window';
 
 const apps = [
   { name: 'Terminal', action: () => alert('Terminal launching...') },
@@ -11,7 +12,7 @@ export default function LauncherMenu() {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="absolute bottom-4 left-4">
+    <Window className="bottom-4 left-4">
       <button
         className="bg-gray-800 text-white px-3 py-2 rounded"
         onClick={() => {
@@ -44,6 +45,6 @@ export default function LauncherMenu() {
           </ul>
         </div>
       )}
-    </div>
+    </Window>
   );
 }

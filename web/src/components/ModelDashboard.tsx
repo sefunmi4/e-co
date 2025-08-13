@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { addModel, listModels, updateModel, Model } from '../../../runtime/src/ai';
+import Window from './Window';
 
 export default function ModelDashboard() {
   const [models, setModels] = useState<Model[]>(listModels());
@@ -21,7 +22,7 @@ export default function ModelDashboard() {
   };
 
   return (
-    <div className="absolute top-4 right-4 bg-white bg-opacity-80 p-2 rounded shadow w-64">
+    <Window className="top-4 right-4 bg-white bg-opacity-80 p-2 rounded shadow w-64">
       <h2 className="font-bold mb-1">Models</h2>
       <div className="flex mb-2">
         <input
@@ -45,6 +46,6 @@ export default function ModelDashboard() {
         ))}
         {models.length === 0 && <li className="text-gray-500">No models</li>}
       </ul>
-    </div>
+    </Window>
   );
 }
