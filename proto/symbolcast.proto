@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package eco.symbolcast;
+
+message PointerEvent {
+  uint64 timestamp = 1;
+  float x = 2;
+  float y = 3;
+  float pressure = 4;
+  string device_id = 5;
+}
+
+message Gesture {
+  string id = 1;
+  string label = 2;
+  float confidence = 3;
+}
+
+service SymbolCast {
+  rpc Recognize(stream PointerEvent) returns (Gesture);
+}

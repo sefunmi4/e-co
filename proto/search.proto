@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package eco.search;
+
+message QueryRequest {
+  string query = 1;
+  string locale = 2;
+  uint32 limit = 3;
+}
+
+message WorldCard {
+  string id = 1;
+  string name = 2;
+  string summary = 3;
+  string entry_scene = 4;
+  repeated string portals = 5;
+}
+
+service Search {
+  rpc Query(QueryRequest) returns (stream WorldCard);
+}

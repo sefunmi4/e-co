@@ -1,12 +1,13 @@
 {
   "private": true,
   "workspaces": [
-    "web",
-    "runtime"
+    "apps/web",
+    "sdks/js"
   ],
   "scripts": {
-    "lint": "eslint \"**/*.{ts,tsx}\" --max-warnings=0",
-    "test": "vitest run --config web/vitest.config.ts && vitest run runtime"
+    "lint": "npm run lint -w apps/web",
+    "test": "npm run build -w sdks/js && npm run test -w sdks/js && npm run test -w apps/web",
+    "build": "npm run build -w sdks/js"
   },
   "devDependencies": {
     "eslint": "^8.56.0",

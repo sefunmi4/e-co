@@ -1,130 +1,114 @@
-# 🧠 Ether Computing & OS — Modular Immersive Desktop Environment (MVP)
+# 🧠 Ether Computing & OS (E-CO) Monorepo
 
-EtherOS is a next-gen modular desktop environment built for immersive computing, symbolic input, and decentralized session portability.
+E-CO is a modular immersive operating environment that unifies Q++ compute, SymbolCast input, and world-scale search across web, desktop, VR, and NixOS deployments. This repository now follows a unified “choose-once, use-everywhere” stack that maps directly to every platform component.
 
-This repo contains:
-- A **cross-platform desktop environment layer**
-- A **browser-accessible web interface**
-- A shared runtime system for gestures, state, and command handling
+## 📦 Repository Layout
 
----
-
-## 🚀 Goals
-
-- Create a lightweight, declarative desktop layer for Linux, macOS, and Windows
-- Simulate VR/immersive computing with SymbolCast input (gestures & voice)
-- Use devices as personal cloud mesh nodes (e.g., headless laptops)
-- Offer browser-based access for testing, collaboration, and mobile users
-
----
-
-## 📁 Structure
-
-```plaintext
-nixos/             → Legacy NixOS configuration
-examples/desktop/  → Qt demo with layered windows and network sync
-web/               → Web version of EtherOS UI (React + Tailwind + Three.js)
-runtime/           → Shared SymbolCast + state logic
-docs/              → Architecture, usage, and planning docs
+```
+apps/
+  web/         – Next.js + Bevy WASM canvas for the browser shell
+  desktop/     – (stub) Tauri host wrapping the web UI
+  wallpaper/   – (stub) native wallpaper hosts wired into the renderer
+engines/
+  eco-core/    – Rust ECS core + ECO.toml manifest loader
+  eco-render/  – Bevy scene graph + lighting systems
+  eco-wm/      – Rust Wayland compositor scaffolding
+services/
+  api/         – Axum gateway for search/actions
+  indexer/     – Tantivy/Qdrant index feeder
+  agent/       – Automation daemon listening to NATS & gRPC events
+sdks/
+  js/          – TypeScript runtime shared by the UI & tools
+  rust/        – Rust SDK exporting manifest helpers
+  cpp-qpp/     – C++ bridge for the Q++ runtime
+tools/
+  packer/      – (stub) world bundler + signer
+  symbolcast/  – (stub) gesture model training suite
+distro/
+  nix/         – flake-based development shell
+  linux/       – packaging notes for Debian/RPM/Arch
+examples/worlds/ – reference ECO manifests and assets
+proto/            – gRPC/Protobuf service contracts
+shared/           – data shared across packages (e.g. environments)
 ```
 
+## 🚀 Quick Start
 
-⸻
+### Install Dependencies
 
-## ⚙️ Getting Started
+Use the repo-level dev shell or your system tooling:
 
-### Prerequisites
-
-Install [Node.js](https://nodejs.org/) and a Qt6 development environment
-with CMake to build the desktop example and web interface.
-
-
-### 🔹 Run the Web Version
 ```bash
-cd web
+# optional but recommended
+direnv allow . # if you use direnv + Nix flakes
+nix develop ./distro/nix   # or install Node.js 20 + Rust + CMake manually
+```
+
+### Bootstrap workspaces
+
+```bash
 npm install
+npm run build            # builds the JS SDK so the web app can import it
+```
+
+### Run the Web Shell (Next.js)
+
+```bash
+cd apps/web
 npm run dev
 ```
 
-### 🔹 Build the Runtime Library
+The page loads a Bevy-powered procedural terrain canvas, SymbolCast mock UI, and window manager overlay. Environment metadata is pulled from `shared/environments.json` and mirrored into `apps/web/public/environments.json` during the build step.
 
-The runtime package compiles TypeScript sources to `dist/`. Build it with:
-
-```bash
-npm run build -w runtime
-```
-The compiled library can then be consumed from `runtime/dist`.
-
-### 🔹 Build the Qt Example
-
-An example Qt application lives in `examples/desktop` to verify the native
-build toolchain. It showcases background, middle, and foreground layers with a
-small control panel to choose the interactive layer and UDP-based network
-sync. Build it with:
+### Test the shared SDKs
 
 ```bash
-cd examples/desktop
-cmake -B build
-cmake --build build
-./build/etheros-example
+npm test           # runs the JS SDK + web component unit tests
 ```
 
-### 🔹 Run the Desktop Application
+Additional Rust crates and services ship with their own `cargo test` targets; run them as needed when iterating on those layers.
 
-The demo desktop environment pulls together three interactive pieces:
+## 🧩 Cross-Cutting Infrastructure
 
-1. **VR-style polygon background** that you can walk through.
-2. **Window controls** to switch backgrounds and enable gesture drawing.
-3. **SymbolCast cursor** for drawing gestures on a track pad and mapping them to commands.
+- **Identity**: OIDC providers (Keycloak/Auth0) with WebAuthn passkeys.
+- **Protocols**: gRPC (Protobuf) for low-latency RPC, NATS for event fan-out.
+- **Storage/Search**: Postgres for state, Tantivy + Qdrant for text/vector search.
+- **Graphics**: Bevy on `wgpu`, targeting native (OpenXR) and WebGPU/WebXR.
+- **Packaging**: Tauri desktop shell, Next.js web app, Nix flakes for reproducible dev environments.
 
-Start everything from the repo root with:
+## 📡 gRPC Interfaces
 
-```bash
-npm run build -w runtime
-cd examples/desktop
-cmake -B build
-cmake --build build
-./build/etheros-example
-```
+See the [`proto/`](proto) directory for service contracts:
 
-Use the control window to pick scenes and toggle gesture mode. When gestures
-are active, draw with your cursor to trigger SymbolCast command mappings.
+- `SymbolCast.Recognize(stream PointerEvent) -> Gesture`
+- `EcoActions.Cast(Action) -> ActionAck`
+- `Search.Query(QueryRequest) -> stream WorldCard`
+- `WindowControl.{List,Pin,Move,Focus}`
 
-### Environment Assets
-The list of available environments lives in `shared/environments.json`. Add your own entries there and provide matching background images in `web/public/`. Images such as `forest.jpg`, `chamber.jpg`, and `island.jpg` are user supplied and ignored by Git.
+Corresponding NATS subjects emit portal, window, and gesture events such as `eco.gesture.detected`, `eco.action.cast`, and `ethos.chat.msg`.
 
+## 🗺️ ECO.toml Manifest
 
----
+The `engines/eco-core` crate defines and validates the signed `ECO.toml` schema. Example manifests live in `examples/worlds/`. Each manifest includes:
 
-## 🌌 MVP Features (WIP)
-- Modular folder structure
-- Basic desktop layout in web
-- SymbolCast input (mock gestures + voice)
-- Cross-platform build scripts
-- Shared command & file system logic
-- Voice-enabled command palette
-- Local AI model dashboard
+- world metadata (`name`, `version`, `entry_scene`)
+- portal graph definitions (`[[portals]]`)
+- service components (`[[components]]`)
+- SymbolCast runtime configuration (`[symbolcast]`)
 
-## 📚 Documentation
-- docs/architecture.md – Full system vision
-- docs/roadmap.md – MVP goals + phases
-- docs/usage.md – Dev setup for desktop & web
+## 🛣️ Roadmap (Sprint Outline)
+
+1. Finalize ECO.toml schema + protobuf contracts, generate language bindings.
+2. Expand the web MVP with navigation between portals and world manifests.
+3. Flesh out Axum API + in-memory search backed by Tantivy/Qdrant.
+4. Replace SymbolCast mock with a streaming daemon backed by ONNX Runtime.
+5. Wrap the web shell in Tauri and expose global hotkeys & offline cache.
+6. Harden the Nix flake to deliver full workstation + mobile profiles.
 
 ## 🤝 Contributing
 
-This project is in active development. If you love OS dev, symbolic UI, or immersive experiences — join us!
+We welcome experiments across graphics, symbolic input, and distributed OS design. Open an issue or start a discussion to collaborate on any slice of the stack.
 
----
+## 🪪 License
 
-## 🌐 License
-
-MIT — feel free to remix, fork, and build with us.
-
----
-
-Want me to:
-- Scaffold the folders + stub files in a zip?
-- Create starter `flake.nix` or web `vite.config.ts`?
-- Write the architecture doc next?
-
-Let’s build ✨
+MIT — build, remix, and extend the platform freely.

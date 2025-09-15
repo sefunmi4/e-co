@@ -1,0 +1,14 @@
+[package]
+name = "eco-wm"
+version = "0.1.0"
+edition = "2021"
+description = "Wayland compositor for Ether Computing window management"
+license = "MIT"
+
+[lib]
+name = "eco_wm"
+path = "src/lib.rs"
+
+[dependencies]
+smithay = { version = "0.3", default-features = false, features = ["backend_winit"] }
+tracing = "0.1"
