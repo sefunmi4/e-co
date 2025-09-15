@@ -1,0 +1,44 @@
+{
+  "name": "@eco/js-sdk",
+  "version": "0.2.0",
+  "private": false,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./commands": {
+      "types": "./dist/commands.d.ts",
+      "default": "./dist/commands.js"
+    },
+    "./state": {
+      "types": "./dist/state.d.ts",
+      "default": "./dist/state.js"
+    },
+    "./gestures": {
+      "types": "./dist/gestures.d.ts",
+      "default": "./dist/gestures.js"
+    },
+    "./ai": {
+      "types": "./dist/ai.d.ts",
+      "default": "./dist/ai.js"
+    },
+    "./logger": {
+      "types": "./dist/logger.d.ts",
+      "default": "./dist/logger.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "prepare": "npm run build"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.1"
+  }
+}

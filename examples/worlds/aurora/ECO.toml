@@ -1,0 +1,21 @@
+name = "Aurora Workspace"
+version = "0.1.0"
+entry_scene = "aurora.glb"
+
+[[portals]]
+id = "lobby"
+target = "eco://worlds/lobby"
+
+[[portals]]
+id = "search"
+target = "eco.search://global"
+
+[[components]]
+id = "symbolcastd"
+service = "grpc://localhost:50061"
+transport = "grpc"
+
+[symbolcast]
+model = "s3://eco-models/symbolcast/latest.onnx"
+threshold = 0.75
+stream = "eco.gesture.detected"

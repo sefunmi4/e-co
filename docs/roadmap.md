@@ -1,28 +1,30 @@
 # Roadmap
 
-This document tracks the planned milestones for the EtherOS MVP.
+The roadmap mirrors the sprint outline described in the architecture plan.
 
-## Phase 1: Prototype
+## Sprint 0 – Monorepo Foundation ✅
+- [x] Restructure repository into apps/engines/services/sdks layout
+- [x] Bootstrap Next.js web shell + JS SDK workspace
+- [x] Stub Rust + C++ crates for renderers, compositor, and Q++ bridge
 
-- [ ] Create basic NixOS flake with minimal desktop environment modules
-- [ ] Implement simple web-based desktop layout
-- [ ] Mock SymbolCast gesture and voice input
+## Sprint 1 – Contracts & SDKs
+- [ ] Finalize `ECO.toml` schema and sign/verify flow
+- [ ] Generate protobuf + gRPC stubs for Rust, TypeScript, and C++
+- [ ] Publish first SymbolCast gesture registry in `@eco/js-sdk`
 
-## Phase 2: Integration
+## Sprint 2 – Service Mesh
+- [ ] Flesh out Axum API with search proxy + auth middleware
+- [ ] Expand indexer to push vectors into Qdrant
+- [ ] Wire eco-agent to run Q++ jobs through the cpp bridge
 
-- [ ] Connect web UI to runtime for command handling
-- [ ] Integrate NixOS layer with runtime for file and system tasks
-- [ ] Add remote access via browser with authentication
+## Sprint 3 – Surface Integration
+- [ ] Embed Bevy WASM renderer inside the Next.js shell with portal navigation
+- [ ] Stand up the Tauri desktop host with offline cache + passkey auth
+- [ ] Add wallpaper host prototypes for macOS/Windows/Wayland
 
-## Phase 3: Polishing
+## Sprint 4 – Distribution
+- [ ] Harden NixOS flake into workstation + creator profiles
+- [ ] Produce desktop installers bundling SymbolCast + eco-api
+- [ ] Deliver lightweight Android/iOS SymbolCast trigger apps
 
-- [ ] Expand module system for additional features
-- [ ] Improve performance and cross-device syncing
-- [ ] Document deployment and contribution guidelines
-- [ ] Mobile & wearable builds using React Native
-- [ ] Verify Qt (Q++) example builds across platforms
-- [ ] AI-native command palette with voice triggers
-- [ ] Local model management dashboard
-
-
-The roadmap may evolve as the project progresses. Community feedback is encouraged.
+Community contributions are welcome across any slice of the plan—open a discussion to coordinate work.
