@@ -1,12 +1,12 @@
 {
   "private": true,
   "workspaces": [
-    "apps/web",
+    "apps/web/pod-world",
     "sdks/js"
   ],
   "scripts": {
-    "lint": "npm run lint -w apps/web",
-    "test": "npm run build -w sdks/js && npm run test -w sdks/js && npm run test -w apps/web",
+    "lint": "npm run lint -w apps/web/pod-world",
+    "test": "npm run build -w sdks/js && npm run test -w sdks/js && npm run test -w apps/web/pod-world",
     "build": "npm run build -w sdks/js"
   },
   "devDependencies": {

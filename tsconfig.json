@@ -1,7 +1,7 @@
 {
   "files": [],
   "references": [
-    { "path": "./apps/web" },
+    { "path": "./apps/web/pod-world" },
     { "path": "./sdks/js" }
   ]
 }
