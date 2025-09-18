@@ -2,6 +2,11 @@
 
 The web shell is a Next.js 14 application that embeds the Bevy renderer (via WASM) alongside the SymbolCast UI, model dashboard, and portal manager. It consumes the shared `@eco/js-sdk` package for state, AI model management, and command dispatch.
 
+The codebase is now split between two top-level folders:
+
+- `frontend/` contains the App Router entrypoints and UI components. Root level files inside `app/` simply proxy to the real implementations in this directory so Next.js can continue to discover the routes.
+- `backend/` stores data shims and server-leaning helpers that the UI pulls from until production services come online.
+
 ## Development
 
 ```bash

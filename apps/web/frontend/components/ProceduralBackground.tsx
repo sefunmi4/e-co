@@ -5,7 +5,7 @@ import { Canvas } from '@react-three/fiber';
 import { PointerLockControls } from '@react-three/drei';
 import * as THREE from 'three';
 import SimplexNoise from 'simplex-noise';
-import getFrequency from '../lib/frequency';
+import getFrequency from '@backend/lib/frequency';
 
 function Terrain() {
   const freq = getFrequency();
