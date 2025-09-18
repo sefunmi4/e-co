@@ -32,6 +32,8 @@ export default defineConfig({
         '../..',
         'sdks/js/src/logger.ts'
       ),
+      '@frontend': path.resolve(__dirname, 'frontend'),
+      '@backend': path.resolve(__dirname, 'backend'),
     },
   },
   test: {
