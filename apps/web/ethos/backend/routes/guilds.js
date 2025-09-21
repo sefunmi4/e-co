@@ -7,7 +7,11 @@ router.use(authenticateToken);
 
 router.post('/', async (req, res) => {
   try {
-    const guild = await guilds.create(req.body);
+    const { owner_id: _ignoredOwnerId, ...clientData } = req.body;
+    const guild = await guilds.create({
+      ...clientData,
+      owner_id: req.user.userId
+    });
     res.status(201).json(guild);
   } catch (err) {
     res.status(500).json({ error: 'failed to create guild' });
