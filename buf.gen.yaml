@@ -1,0 +1,14 @@
+version: v1
+plugins:
+  - plugin: es
+    out: apps/web/ethos/frontend/lib/proto
+    path: ./node_modules/.bin/protoc-gen-es
+    opt:
+      - target=ts
+      - import_extension=none
+  - plugin: connect-web
+    out: apps/web/ethos/frontend/lib/proto
+    path: ./node_modules/.bin/protoc-gen-connect-web
+    opt:
+      - target=ts
+      - import_extension=none

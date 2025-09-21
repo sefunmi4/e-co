@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package ethos.v1;
+
+option go_package = "github.com/e-co/ethos";
+
+message Participant {
+  string user_id = 1;
+  string display_name = 2;
+  string avatar_url = 3;
+}
+
+message Conversation {
+  string id = 1;
+  string topic = 2;
+  repeated Participant participants = 3;
+  int64 updated_at = 4;
+}
+
+message Message {
+  string id = 1;
+  string conversation_id = 2;
+  string sender_id = 3;
+  string body = 4;
+  int64 timestamp_ms = 5;
+}
+
+enum PresenceState {
+  PRESENCE_STATE_UNSPECIFIED = 0;
+  STATE_OFFLINE = 1;
+  STATE_ONLINE = 2;
+  STATE_AWAY = 3;
+  STATE_BUSY = 4;
+}
+
+message PresenceEvent {
+  string user_id = 1;
+  PresenceState state = 2;
+  int64 updated_at = 3;
+}
+
+message ListConversationsRequest {}
+
+message ListConversationsResponse {
+  repeated Conversation conversations = 1;
+}
+
+message StreamMessagesRequest {
+  string conversation_id = 1;
+}
+
+message StreamMessagesResponse {
+  Message message = 1;
+}
+
+message CreateConversationRequest {
+  repeated string participant_user_ids = 1;
+  string topic = 2;
+}
+
+message CreateConversationResponse {
+  Conversation conversation = 1;
+}
+
+message SendMessageRequest {
+  string conversation_id = 1;
+  string body = 2;
+}
+
+message SendMessageResponse {
+  Message message = 1;
+}
+
+message StreamPresenceRequest {
+  repeated string user_ids = 1;
+}
+
+message StreamPresenceResponse {
+  PresenceEvent event = 1;
+}
+
+service ConversationsService {
+  rpc ListConversations(ListConversationsRequest) returns (ListConversationsResponse);
+  rpc CreateConversation(CreateConversationRequest) returns (CreateConversationResponse);
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
+  rpc StreamMessages(StreamMessagesRequest) returns (stream StreamMessagesResponse);
+  rpc StreamPresence(StreamPresenceRequest) returns (stream StreamPresenceResponse);
+}
