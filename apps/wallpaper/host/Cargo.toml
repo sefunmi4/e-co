@@ -1,0 +1,52 @@
+[package]
+name = "wallpaper-host"
+version = "0.1.0"
+edition = "2021"
+description = "Platform wallpaper hosts for Ether Computing portals"
+license = "MIT"
+
+[lib]
+name = "wallpaper_host"
+path = "src/lib.rs"
+
+[features]
+default = []
+smoke-windows = []
+smoke-macos = []
+smoke-wayland = []
+
+[dependencies]
+anyhow = "1.0"
+async-nats = "0.33"
+bevy = { version = "0.13", default-features = false, features = ["bevy_asset", "bevy_scene", "bevy_winit", "x11", "wayland"] }
+clap = { version = "4.5", features = ["derive", "env"] }
+eco_render = { package = "eco-render", path = "../../../engines/eco-render" }
+eco_core = { package = "eco-core", path = "../../../engines/eco-core" }
+futures = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+tracing = "0.1"
+thiserror = "1.0"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Direct3D12",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_UI_WindowsAndMessaging"
+] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc = "0.2"
+metal = "0.27"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+smithay-client-toolkit = { version = "0.18", default-features = false }
+wayland-client = "0.31"
+wayland-backend = { version = "0.3", features = ["dlopen"] }
+
+[dev-dependencies]
+assert_cmd = "2.0"
+tokio = { version = "1", features = ["macros", "rt", "time"] }
