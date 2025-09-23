@@ -10,5 +10,5 @@ name = "eco_render"
 path = "src/lib.rs"
 
 [dependencies]
-bevy = { version = "0.13", default-features = false, features = ["bevy_winit", "bevy_scene"] }
+bevy = { version = "0.13", default-features = false, features = ["bevy_winit", "bevy_scene", "bevy_render", "bevy_core_pipeline", "bevy_pbr", "bevy_asset"] }
 thiserror = "1.0"
