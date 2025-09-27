@@ -37,6 +37,7 @@ export interface ConversationsState {
   sending: boolean;
   conversations: ConversationWithMessages[];
   presence: Record<string, NormalizedPresenceEvent>;
+  activeConversation?: ConversationWithMessages;
   activeConversationId?: string;
   stream?: AsyncIterable<StreamMessagesResponse>;
   eventSource?: EventSource | null;
@@ -53,9 +54,9 @@ const client = createConversationsClient();
 const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:8080";
 
 const normalizePresence = (event: PlainMessage<PresenceEvent>): NormalizedPresenceEvent => ({
-  userId: event.userId ?? event.user_id ?? "",
+  userId: event.userId ?? "",
   state: event.state ?? PresenceState.PRESENCE_STATE_UNSPECIFIED,
-  updatedAt: BigInt(event.updatedAt ?? event.updated_at ?? Date.now()),
+  updatedAt: BigInt(event.updatedAt ?? Date.now()),
 });
 
 const parsePresence = (events: PlainMessage<PresenceEvent>[]) => {
@@ -67,17 +68,17 @@ const parsePresence = (events: PlainMessage<PresenceEvent>[]) => {
 };
 
 const normalizeParticipant = (participant: PlainMessage<Participant>): NormalizedParticipant => ({
-  userId: participant.userId ?? participant.user_id ?? "",
-  displayName: participant.displayName ?? participant.display_name ?? "",
-  avatarUrl: participant.avatarUrl ?? participant.avatar_url ?? "",
+  userId: participant.userId ?? "",
+  displayName: participant.displayName ?? "",
+  avatarUrl: participant.avatarUrl ?? "",
 });
 
 const normalizeMessage = (message: PlainMessage<Message>): NormalizedMessage => ({
   id: message.id ?? "",
-  conversationId: message.conversationId ?? message.conversation_id ?? "",
-  senderId: message.senderId ?? message.sender_id ?? "",
+  conversationId: message.conversationId ?? "",
+  senderId: message.senderId ?? "",
   body: message.body ?? "",
-  timestampMs: BigInt(message.timestampMs ?? message.timestamp_ms ?? Date.now()),
+  timestampMs: BigInt(message.timestampMs ?? Date.now()),
 });
 
 const normalizeConversation = (
@@ -97,7 +98,7 @@ const normalizeConversation = (
     id: rawConversation.id ?? "",
     topic: rawConversation.topic ?? "",
     participants,
-    updatedAt: BigInt(rawConversation.updatedAt ?? rawConversation.updated_at ?? Date.now()),
+    updatedAt: BigInt(rawConversation.updatedAt ?? Date.now()),
     messages,
   };
 };
@@ -108,6 +109,7 @@ export const useConversationStore = create<ConversationsState>()(
     sending: false,
     conversations: [],
     presence: {},
+    activeConversation: undefined,
     stream: undefined,
     eventSource: null,
     async bootstrap() {
@@ -129,6 +131,7 @@ export const useConversationStore = create<ConversationsState>()(
         set({
           conversations: mapped,
           presence: parsePresence(payload.presence),
+          activeConversation: mapped[0],
           loading: false,
         });
         if (mapped[0]) {
@@ -140,18 +143,19 @@ export const useConversationStore = create<ConversationsState>()(
       }
     },
     selectConversation(conversationId) {
-      const { conversations, eventSource } = get();
-      if (conversationId === get().activeConversationId) return;
-      set({ activeConversationId: conversationId, loading: true });
+      const { conversations, eventSource, activeConversationId } = get();
+      if (conversationId === activeConversationId) return;
+      const nextConversation = conversations.find((conversation) => conversation.id === conversationId);
+      set({
+        activeConversationId: conversationId,
+        activeConversation: nextConversation,
+        loading: !nextConversation,
+      });
       if (eventSource) {
         eventSource.close();
       }
       const session = useSessionStore.getState().session;
       if (!session) return;
-      const nextConversation = conversations.find((conversation) => conversation.id === conversationId);
-      if (nextConversation) {
-        set({ loading: false });
-      }
       const source = new EventSource(
         `${gatewayUrl}/api/conversations/${conversationId}/stream?token=${session.token}`,
       );
@@ -192,17 +196,26 @@ export const useConversationStore = create<ConversationsState>()(
     },
     addMessage(conversationId, message) {
       set((state) => {
+        let activeConversation = state.activeConversation;
         const conversations = state.conversations.map((conversation) => {
           if (conversation.id !== conversationId) return conversation;
           const sender =
             conversation.participants.find((participant) => participant.userId === message.senderId) ??
-            Participant.create({ userId: message.senderId });
-          return {
+            normalizeParticipant({
+              userId: message.senderId,
+              displayName: "",
+              avatarUrl: "",
+            });
+          const updatedConversation = {
             ...conversation,
             messages: [...conversation.messages, { message, sender }],
           };
+          if (state.activeConversationId === conversationId) {
+            activeConversation = updatedConversation;
+          }
+          return updatedConversation;
         });
-        return { conversations, loading: false };
+        return { conversations, activeConversation, loading: false };
       });
     },
     updatePresence(event) {
@@ -228,6 +241,7 @@ export const resetConversationStore = () =>
     sending: false,
     conversations: [],
     presence: {},
+    activeConversation: undefined,
     activeConversationId: undefined,
     stream: undefined,
     eventSource: null,

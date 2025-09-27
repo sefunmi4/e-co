@@ -1,14 +1,12 @@
 import { createPromiseClient, type Interceptor } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
-import { ConversationsService } from "@/lib/proto/ethos_connect";
+import {
+  ConversationsService,
+  ConversationsServiceDefinition,
+} from "@/lib/proto/ethos_connect";
 import { useSessionStore } from "@/lib/stores/session";
 
 export const createConversationsClient = () => {
-  const transport = createConnectTransport({
-    baseUrl: process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:8080",
-    useBinaryFormat: false,
-  });
-
   const authInterceptor: Interceptor = (next) => async (request) => {
     const token = useSessionStore.getState().session?.token;
     if (token) {
@@ -17,7 +15,14 @@ export const createConversationsClient = () => {
     return next(request);
   };
 
-  return createPromiseClient(ConversationsService, transport, {
+  const transport = createConnectTransport({
+    baseUrl: process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:8080",
+    useBinaryFormat: false,
     interceptors: [authInterceptor],
   });
+
+  return createPromiseClient<typeof ConversationsService>(
+    ConversationsServiceDefinition,
+    transport,
+  );
 };
