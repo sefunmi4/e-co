@@ -1,11 +1,11 @@
 "use client";
 
-import { Conversation } from "@/lib/proto/ethos_pb";
 import { useConversationStore } from "@/lib/stores/conversations";
+import type { ConversationWithMessages } from "@/lib/stores/conversations";
 import clsx from "clsx";
 
 interface SidebarProps {
-  conversations: Conversation[];
+  conversations: ConversationWithMessages[];
 }
 
 export default function Sidebar({ conversations }: SidebarProps) {
