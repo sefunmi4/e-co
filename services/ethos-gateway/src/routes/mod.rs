@@ -19,6 +19,7 @@ pub fn router(state: AppState) -> Router {
     let shared = Arc::new(state);
     Router::new()
         .route("/auth/login", post(login))
+        .route("/auth/register", post(register))
         .route("/auth/session", get(session))
         .route(
             "/api/conversations",

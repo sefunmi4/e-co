@@ -28,6 +28,12 @@ interface LoginRequest {
   password: string;
 }
 
+interface RegisterRequest {
+  email: string;
+  password: string;
+  displayName?: string;
+}
+
 interface SessionResponse {
   token: string;
   matrix_access_token?: string;
@@ -40,6 +46,7 @@ export interface SessionStoreState {
   session?: Session;
   error?: string;
   login: (request: LoginRequest) => Promise<void>;
+  register: (request: RegisterRequest) => Promise<void>;
   hydrate: () => Promise<void>;
   logout: () => void;
 }
@@ -67,19 +74,16 @@ export const createSessionStore = (
   create<SessionStoreState>()(
     devtools(
       persist(
-        (set, get) => ({
-          status: "idle" as SessionStatus,
-          session: undefined,
-          error: undefined,
-          async login({ email, password }) {
+        (set, get) => {
+          const authenticate = async (path: string, body: Record<string, unknown>) => {
             set({ status: "loading", error: undefined });
             try {
-              const response = await dependencies.fetch(`${dependencies.gatewayUrl}/auth/login`, {
+              const response = await dependencies.fetch(`${dependencies.gatewayUrl}${path}`, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
                 },
-                body: JSON.stringify({ email, password }),
+                body: JSON.stringify(body),
               });
 
               if (!response.ok) {
@@ -104,7 +108,22 @@ export const createSessionStore = (
                 error: error instanceof Error ? error.message : "Unable to authenticate",
               });
             }
-          },
+          };
+
+          return {
+            status: "idle" as SessionStatus,
+            session: undefined,
+            error: undefined,
+            async login({ email, password }) {
+              await authenticate("/auth/login", { email, password });
+            },
+            async register({ email, password, displayName }) {
+              await authenticate("/auth/register", {
+                email,
+                password,
+                display_name: displayName,
+              });
+            },
           async hydrate() {
             const { session } = get();
             if (!session) return;
@@ -138,7 +157,8 @@ export const createSessionStore = (
           logout() {
             set({ session: undefined, status: "idle", error: undefined });
           },
-        }),
+          };
+        },
         {
           name: "ethos-session",
           storage: createJSONStorage(() => dependencies.storage ?? (typeof window !== "undefined" ? window.localStorage : memoryStorage)),

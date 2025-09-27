@@ -15,6 +15,7 @@ pub struct GatewayConfig {
     pub http_addr: SocketAddr,
     pub grpc_addr: SocketAddr,
     pub nats_url: Option<String>,
+    pub database_url: String,
     pub matrix: Option<MatrixConfig>,
 }
 
@@ -29,6 +30,8 @@ impl GatewayConfig {
             .unwrap_or_else(|_| "0.0.0.0:8081".to_string())
             .parse()?;
         let nats_url = env::var("ETHOS_NATS_URL").ok();
+        let database_url = env::var("ETHOS_DATABASE_URL")
+            .unwrap_or_else(|_| "postgres://ethos:ethos@localhost:5432/ethos".to_string());
 
         let matrix = match env::var("ETHOS_MATRIX_HOMESERVER") {
             Ok(homeserver) => Some(MatrixConfig {
@@ -46,6 +49,7 @@ impl GatewayConfig {
             http_addr,
             grpc_addr,
             nats_url,
+            database_url,
             matrix,
         })
     }
