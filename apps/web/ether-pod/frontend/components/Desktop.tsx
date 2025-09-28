@@ -1,116 +1,38 @@
 "use client";
 
-import React, { useState } from 'react';
-import Window from './Window';
+import React, { useEffect } from 'react';
+import ChatWindow from './ChatWindow';
 import Taskbar from './Taskbar';
-
-interface Item {
-  id: string;
-  name: string;
-  type: 'file' | 'folder';
-  x: number;
-  y: number;
-  parentId: string | null;
-}
-
-const initialItems: Item[] = [
-  { id: 'file-1', name: 'Notes.txt', type: 'file', x: 40, y: 40, parentId: null },
-  { id: 'folder-1', name: 'Projects', type: 'folder', x: 140, y: 40, parentId: null },
-];
+import { useEthosStore } from '../state/ethos';
 
 export default function Desktop() {
-  const [items, setItems] = useState<Item[]>(initialItems);
-  const [openFolders, setOpenFolders] = useState<string[]>([]);
+  const bootstrap = useEthosStore((state) => state.bootstrap);
+  const openRooms = useEthosStore((state) => state.openRooms);
+  const status = useEthosStore((state) => state.status);
+  const error = useEthosStore((state) => state.error);
 
-  const handleDragStart = (id: string) => (e: React.DragEvent) => {
-    e.dataTransfer.setData('text/plain', id);
-  };
-
-  const handleDesktopDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const id = e.dataTransfer.getData('text/plain');
-    if (!id) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    setItems((prev) =>
-      prev.map((it) =>
-        it.id === id ? { ...it, x, y, parentId: null } : it
-      )
-    );
-  };
-
-  const handleFolderDrop = (folderId: string) => (e: React.DragEvent) => {
-    e.preventDefault();
-    const id = e.dataTransfer.getData('text/plain');
-    if (!id || id === folderId) return;
-    setItems((prev) =>
-      prev.map((it) => (it.id === id ? { ...it, parentId: folderId } : it))
-    );
-  };
-
-  const openFolder = (id: string) => {
-    if (!openFolders.includes(id)) setOpenFolders((prev) => [...prev, id]);
-  };
-  const closeFolder = (id: string) => {
-    setOpenFolders((prev) => prev.filter((f) => f !== id));
-  };
-
-  const folderContents = (folderId: string) =>
-    items.filter((it) => it.parentId === folderId);
+  useEffect(() => {
+    void bootstrap();
+  }, [bootstrap]);
 
   return (
     <>
-      <div
-        className="absolute inset-0 z-20"
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={handleDesktopDrop}
-      >
-        {items
-          .filter((it) => it.parentId === null)
-          .map((it) => (
-            <div
-              key={it.id}
-              draggable
-              onDragStart={handleDragStart(it.id)}
-              onDoubleClick={() => it.type === 'folder' && openFolder(it.id)}
-              onDrop={
-                it.type === 'folder' ? handleFolderDrop(it.id) : undefined
-              }
-              onDragOver={
-                it.type === 'folder' ? (e) => e.preventDefault() : undefined
-              }
-              className="absolute w-16 text-center select-none"
-              style={{ left: it.x, top: it.y }}
-            >
-              <div className="w-16 h-16 bg-white/70 rounded mb-1 flex items-center justify-center">
-                {it.type === 'folder' ? '📁' : '📄'}
-              </div>
-              <span className="text-xs">{it.name}</span>
-            </div>
-          ))}
-        {openFolders.map((id) => {
-          const folder = items.find((it) => it.id === id)!;
-          return (
-            <Window key={id} className="top-24 left-24 w-48 bg-white p-2">
-              <div className="font-bold mb-2 flex justify-between">
-                {folder.name}
-                <button onClick={() => closeFolder(id)}>×</button>
-              </div>
-              <ul>
-                {folderContents(id).map((child) => (
-                  <li key={child.id}>{child.name}</li>
-                ))}
-              </ul>
-            </Window>
-          );
-        })}
-      </div>
-      <Taskbar
-        openFolders={openFolders.map(
-          (id) => items.find((it) => it.id === id)?.name || id
+      <div className="absolute inset-0 z-20">
+        {status === 'connecting' && (
+          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-xl border border-indigo-500/40 bg-gray-950/70 px-6 py-4 text-indigo-100 shadow-xl">
+            Connecting to Ethos…
+          </div>
         )}
-      />
+        {status === 'error' && error && (
+          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-xl border border-red-500/50 bg-red-950/80 px-6 py-4 text-red-100 shadow-xl">
+            {error}
+          </div>
+        )}
+        {openRooms.map((conversationId, index) => (
+          <ChatWindow key={conversationId} conversationId={conversationId} index={index} />
+        ))}
+      </div>
+      <Taskbar />
     </>
   );
 }

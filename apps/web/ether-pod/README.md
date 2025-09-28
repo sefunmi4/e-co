@@ -1,23 +1,23 @@
 # Ether Pod Web Shell
 
 Ether Pod is the browser-based SymbolCast shell. The Next.js application hosts
-the 3D renderer, desktop UI, and supporting server helpers that provide mock
-world data while the production services are in flight.
+the 3D renderer, desktop UI, and supporting server helpers that provide mocked
+world data until the production services come online.
 
-## Repository Layout
+## Repository layout
 
 ```
 ether-pod/
 ├── app/         # Proxy entrypoints so Next.js can discover the routes
 ├── backend/     # Server helpers consumed via the @backend/* alias
-├── frontend/    # Actual App Router pages, layouts, and components
+├── frontend/    # App Router pages, layouts, and UI components
 ├── public/      # Static assets copied into the build output
 └── scripts/     # Utility scripts such as copy-env
 ```
 
-The files under `app/` simply re-export implementations from `frontend/app`.
-Keeping the real code in `frontend/` lets the UI live beside components and
-client utilities, while the proxies satisfy Next.js' filesystem-based routing.
+Files under `app/` simply re-export implementations from `frontend/app`. Keeping
+the real code in `frontend/` lets the UI live beside components and client
+utilities while the proxies satisfy Next.js' filesystem routing.
 
 ## Development
 
@@ -29,16 +29,14 @@ npm install
 npm run dev
 ```
 
-The `dev` script runs `scripts/copy-env.js` to mirror
-`shared/environments.json` into `public/environments.json` before starting the
-Next.js dev server on `http://localhost:3000`.
+The `dev` script mirrors `shared/environments.json` into
+`public/environments.json` before starting the Next.js dev server on
+`http://localhost:3000`. Server-leaning helpers live in `backend/` and are
+imported using the `@backend/*` alias defined in `tsconfig.json`, so the same
+process can serve API routes, server components, and data loaders without a
+separate Node service.
 
-Server-leaning helpers live in `backend/` and are imported using the
-`@backend/*` alias defined in `tsconfig.json`. This allows the same process to
-serve API routes, server components, and data loaders without a separate Node
-service.
-
-## Production Builds
+## Production builds
 
 ```bash
 npm run build

@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package eco.actions;
 
+import "symbolcast.proto";
+
 message Action {
   string id = 1;
   string kind = 2;
@@ -15,6 +17,42 @@ message ActionAck {
   string message = 3;
 }
 
+message EvaluateRequest {
+  string job_id = 1;
+  string expression = 2;
+  string requested_by = 3;
+  string model = 4;
+}
+
+message EvaluateResponse {
+  string job_id = 1;
+  double energy = 2;
+  double fidelity = 3;
+  string model = 4;
+}
+
+message FrequencyStreamRequest {
+  string job_id = 1;
+}
+
+message FrequencyUpdate {
+  string job_id = 1;
+  double frequency = 2;
+  double amplitude = 3;
+  int64 timestamp_ms = 4;
+}
+
+message GestureEvaluation {
+  string job_id = 1;
+  string gesture_id = 2;
+  string gesture_label = 3;
+  double confidence = 4;
+  EvaluateResponse result = 5;
+}
+
 service EcoActions {
   rpc Cast(Action) returns (ActionAck);
+  rpc Evaluate(EvaluateRequest) returns (EvaluateResponse);
+  rpc StreamFrequencies(FrequencyStreamRequest) returns (stream FrequencyUpdate);
+  rpc RecognizeGesture(stream eco.symbolcast.PointerEvent) returns (GestureEvaluation);
 }

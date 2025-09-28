@@ -1,44 +1,47 @@
 # Web Applications
 
-This directory houses the web experiences that ship with the E-CO project. Each
-application contains a browser-facing frontend and a supporting backend layer so
-that the two pieces can evolve independently.
+The `apps/web` workspace contains the browser experiences that ship with the
+E-CO project. Each app pairs a UI surface with a supporting server so the two
+parts can evolve independently.
 
 ## Ethos (`ethos/`)
 
-Ethos is the cooperative questing experience. The folder contains:
+Ethos delivers the cooperative questing workflow. The package is split into:
 
-- `backend/` – a Node.js + Express API with PostgreSQL storage. It exposes the
-  quest, guild, and notification endpoints documented in `API.md`.
-- `frontend/` – a Vite powered React client that consumes the API and sockets.
+- `backend/` – Node.js + Express API backed by PostgreSQL and Socket.IO.
+- `frontend/` – Vite powered React interface that consumes the REST and socket
+  endpoints.
 
-Development quick start:
+### Local development
 
 ```bash
-# start the API
+# API (port 3000 by default)
 cd apps/web/ethos/backend
 npm install
-DATABASE_URL=postgres://user:pass@localhost:5432/ethos JWT_SECRET=change-me npm start
+# create .env with DATABASE_URL and JWT_SECRET or export them in your shell
+npm start
 
-# in a new shell start the UI
+# UI (served from http://localhost:5173)
 cd apps/web/ethos/frontend
 npm install
 VITE_API_URL=http://localhost:3000 npm run dev
 ```
 
-See `ethos/README.md` for more detail on configuration, migrations, and testing.
+The backend README documents migrations, tests, and environment variables. The
+frontend README covers linting, builds, and socket configuration.
 
 ## Ether Pod (`ether-pod/`)
 
-Ether Pod hosts the immersive SymbolCast shell. The folder is structured as:
+Ether Pod hosts the SymbolCast VR shell inside a Next.js 14 runtime. The code is
+arranged as:
 
-- `frontend/` – the Next.js App Router implementation and UI components.
-- `backend/` – server-leaning helpers that the Next runtime can import through
-  the `@backend/*` TypeScript alias.
-- `app/` – thin proxy files that let Next.js discover the real routes housed in
+- `frontend/` – App Router pages, layouts, and reusable UI components.
+- `backend/` – Server-only helpers that are imported via the `@backend/*` alias
+  from within the same Next process.
+- `app/` – Thin proxy files so Next.js can discover the real routes in
   `frontend/app`.
 
-To run the experience locally, the Next.js dev server is sufficient:
+### Local development
 
 ```bash
 cd apps/web/ether-pod
@@ -46,6 +49,9 @@ npm install
 npm run dev
 ```
 
-This command copies `shared/environments.json` into `public/environments.json`
-and starts the combined frontend/backend runtime. Refer to
-`ether-pod/README.md` for additional scripts and testing notes.
+The `dev` script mirrors `shared/environments.json` into
+`public/environments.json` before starting the combined frontend/backend server
+on `http://localhost:3000`.
+
+Refer to each application's README for additional build, lint, and test
+information.

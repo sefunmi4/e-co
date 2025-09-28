@@ -38,6 +38,7 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    exclude: [...configDefaults.exclude, 'ethos/**'],
+    exclude: [...configDefaults.exclude, 'ethos/**', 'frontend/tests/**'],
+    setupFiles: ['./test/vitest.setup.ts'],
   },
 });
