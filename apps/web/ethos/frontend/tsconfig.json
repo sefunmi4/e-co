@@ -6,7 +6,7 @@
       "dom.iterable",
       "esnext"
     ],
-    "allowJs": false,
+    "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
@@ -18,11 +18,26 @@
     "jsx": "preserve",
     "baseUrl": ".",
     "paths": {
+      "@/api/*": [
+        "./api/*"
+      ],
       "@/components/*": [
         "./components/*"
       ],
+      "@/hooks/*": [
+        "./hooks/*"
+      ],
       "@/lib/*": [
         "./lib/*"
+      ],
+      "@/pages/*": [
+        "./ethos-pages/*"
+      ],
+      "@/utils/*": [
+        "./utils/*"
+      ],
+      "@/utils": [
+        "./utils/index"
       ]
     },
     "types": [
