@@ -38,7 +38,7 @@ describe("session store", () => {
         token: "jwt-token",
         matrix_access_token: "matrix-token",
         matrix_homeserver: "https://matrix.example",
-        user: { id: "user-1", email: "user@example.com", displayName: "User" },
+        user: { id: "user-1", email: "user@example.com", display_name: "User" },
       }),
       { status: 200 },
     );
@@ -48,6 +48,8 @@ describe("session store", () => {
     expect(deps.fetch).toHaveBeenCalledWith("http://localhost:8080/auth/login", expect.any(Object));
     expect(state.status).toBe("authenticated");
     expect(state.session?.matrix.ready).toBe(true);
+    expect(state.session?.user).not.toHaveProperty("display_name");
+    expect(state.session?.user.displayName).toBe("User");
   });
 
   it("hydrates an existing session", async () => {
@@ -55,7 +57,7 @@ describe("session store", () => {
     deps.responses["http://localhost:8080/auth/session"] = new Response(
       JSON.stringify({
         token: "jwt-token",
-        user: { id: "user-1", email: "user@example.com" },
+        user: { id: "user-1", email: "user@example.com", display_name: null },
       }),
       { status: 200 },
     );

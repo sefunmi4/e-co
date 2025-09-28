@@ -11,6 +11,12 @@ export interface SessionUser {
   displayName?: string | null;
 }
 
+interface SessionResponseUser {
+  id: string;
+  email: string;
+  display_name?: string | null;
+}
+
 export interface MatrixState {
   ready: boolean;
   homeserver?: string;
@@ -38,7 +44,7 @@ interface SessionResponse {
   token: string;
   matrix_access_token?: string;
   matrix_homeserver?: string;
-  user: SessionUser;
+  user: SessionResponseUser;
 }
 
 export interface SessionStoreState {
@@ -68,6 +74,23 @@ const defaultDependencies: SessionStoreDependencies = {
   gatewayUrl: process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:8080",
 };
 
+const normalizeSession = (payload: SessionResponse): Session => {
+  const { display_name, ...user } = payload.user;
+  return {
+    token: payload.token,
+    matrix: {
+      ready: Boolean(payload.matrix_access_token),
+      homeserver: payload.matrix_homeserver,
+      accessToken: payload.matrix_access_token,
+    },
+    user: {
+      id: user.id,
+      email: user.email,
+      displayName: display_name === undefined ? undefined : display_name,
+    },
+  };
+};
+
 export const createSessionStore = (
   dependencies: SessionStoreDependencies = defaultDependencies,
 ) =>
@@ -92,15 +115,7 @@ export const createSessionStore = (
               }
 
               const payload = (await response.json()) as SessionResponse;
-              const session: Session = {
-                token: payload.token,
-                matrix: {
-                  ready: Boolean(payload.matrix_access_token),
-                  homeserver: payload.matrix_homeserver,
-                  accessToken: payload.matrix_access_token,
-                },
-                user: payload.user,
-              };
+              const session = normalizeSession(payload);
               set({ session, status: "authenticated", error: undefined });
             } catch (error) {
               set({
@@ -139,15 +154,7 @@ export const createSessionStore = (
               const payload = (await response.json()) as SessionResponse;
               set({
                 status: "authenticated",
-                session: {
-                  token: payload.token,
-                  matrix: {
-                    ready: Boolean(payload.matrix_access_token),
-                    homeserver: payload.matrix_homeserver,
-                    accessToken: payload.matrix_access_token,
-                  },
-                  user: payload.user,
-                },
+                session: normalizeSession(payload),
                 error: undefined,
               });
             } catch (error) {
