@@ -31,6 +31,7 @@ impl GatewayConfig {
             .parse()?;
         let nats_url = env::var("ETHOS_NATS_URL").ok();
         let database_url = env::var("ETHOS_DATABASE_URL")
+            .or_else(|_| env::var("DATABASE_URL"))
             .unwrap_or_else(|_| "postgres://ethos:ethos@localhost:5432/ethos".to_string());
 
         let matrix = match env::var("ETHOS_MATRIX_HOMESERVER") {

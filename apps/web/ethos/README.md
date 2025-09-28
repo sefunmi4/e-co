@@ -69,6 +69,8 @@ The crate uses an in-memory room service by default and can be compiled with the
 - `ETHOS_HTTP_ADDR` – HTTP listen address (`0.0.0.0:8080` by default)
 - `ETHOS_GRPC_ADDR` – gRPC listen address (`0.0.0.0:8081` by default)
 - `ETHOS_NATS_URL` – Optional NATS connection string for publishing chat events
+- `ETHOS_DATABASE_URL` / `DATABASE_URL` – Postgres connection string for the
+  user store (defaults to `postgres://ethos:ethos@localhost:5432/ethos`)
 - `ETHOS_MATRIX_HOMESERVER` / `ETHOS_MATRIX_ACCESS_TOKEN` – Optional Matrix
   credentials when bridging to a homeserver
 
