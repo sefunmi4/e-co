@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Layout from "./Layout.jsx";
 
 import Dashboard from "./Dashboard";
@@ -23,7 +26,7 @@ import AdminUtils from "./AdminUtils";
 
 import CreateGuild from "./CreateGuild";
 
-import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useLocation } from "react-router-dom";
 
 const PAGES = {
     
@@ -105,6 +108,16 @@ function PagesContent() {
 }
 
 export default function Pages() {
+    const [isClient, setIsClient] = useState(false);
+
+    useEffect(() => {
+        setIsClient(true);
+    }, []);
+
+    if (!isClient) {
+        return null;
+    }
+
     return (
         <Router>
             <PagesContent />
