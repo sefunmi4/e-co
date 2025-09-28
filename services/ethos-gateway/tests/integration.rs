@@ -1,11 +1,13 @@
-use std::sync::Arc;
+use std::{env, sync::Arc};
 
 use axum::body::{self, Body};
 use axum::http::{Request as HttpRequest, StatusCode};
+use deadpool_postgres::Config as PgConfig;
 use ethos_gateway::auth;
 use ethos_gateway::config::GatewayConfig;
 use ethos_gateway::grpc::ConversationsGrpc;
 use ethos_gateway::matrix::NullMatrixBridge;
+use ethos_gateway::migrations::run_migrations;
 use ethos_gateway::proto::ethos::v1::{
     conversations_service_server::ConversationsService, SendMessageRequest, StreamMessagesRequest,
 };
@@ -14,6 +16,7 @@ use ethos_gateway::services::{EventPublisher, InMemoryRoomService, RoomService, 
 use ethos_gateway::state::AppState;
 use futures::StreamExt;
 use serde_json::json;
+use tokio_postgres::NoTls;
 use tonic::Request as GrpcRequest;
 use tower::ServiceExt;
 
@@ -23,6 +26,9 @@ fn make_config() -> GatewayConfig {
         http_addr: "127.0.0.1:0".parse().unwrap(),
         grpc_addr: "127.0.0.1:0".parse().unwrap(),
         nats_url: None,
+        database_url: env::var("ETHOS_TEST_DATABASE_URL")
+            .or_else(|_| env::var("DATABASE_URL"))
+            .unwrap_or_else(|_| "postgres://ethos:ethos@localhost:5432/ethos".into()),
         matrix: None,
     }
 }
@@ -49,11 +55,19 @@ async fn build_state() -> (
     Arc<TestPublisher>,
 ) {
     let config = make_config();
+    let mut pg_config = PgConfig::new();
+    pg_config.url = Some(config.database_url.clone());
+    let db = pg_config
+        .create_pool(None, NoTls)
+        .expect("failed to create postgres pool for tests");
+    run_migrations(&db)
+        .await
+        .expect("failed to run migrations for tests");
     let room_service = Arc::new(InMemoryRoomService::new());
     let test_publisher = Arc::new(TestPublisher::default());
     let matrix = Arc::new(NullMatrixBridge);
     let publisher: Arc<dyn EventPublisher> = test_publisher.clone();
-    let app_state = AppState::new(config.clone(), room_service.clone(), publisher, matrix);
+    let app_state = AppState::new(config.clone(), db, room_service.clone(), publisher, matrix);
     (config, app_state, room_service, test_publisher)
 }
 

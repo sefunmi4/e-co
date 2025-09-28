@@ -160,6 +160,21 @@ pub async fn register(
                 if code == &SqlState::UNIQUE_VIOLATION {
                     return (StatusCode::CONFLICT, "Email already registered");
                 }
+                if matches!(
+                    code,
+                    &SqlState::UNDEFINED_TABLE
+                        | &SqlState::UNDEFINED_COLUMN
+                        | &SqlState::INVALID_SCHEMA_NAME
+                ) {
+                    error!(
+                        error = ?error,
+                        "failed to register user because database schema is unavailable"
+                    );
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        "Registration temporarily unavailable while the service initializes",
+                    );
+                }
             }
             error!(error = ?error, "failed to register user");
             (StatusCode::INTERNAL_SERVER_ERROR, "Failed to register user")
