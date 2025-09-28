@@ -2,6 +2,7 @@ pub mod auth;
 pub mod config;
 pub mod grpc;
 pub mod matrix;
+pub mod migrations;
 pub mod routes;
 pub mod services;
 pub mod state;

@@ -7,6 +7,7 @@ use ethos_gateway::{
     config::GatewayConfig,
     grpc,
     matrix::matrix_bridge_from_config,
+    migrations::run_migrations,
     router,
     services::{EventPublisher, InMemoryRoomService, NatsPublisher, NoopPublisher, RoomService},
     state::AppState,
@@ -33,12 +34,7 @@ async fn main() -> anyhow::Result<()> {
     let db = pg_config
         .create_pool(None, NoTls)
         .context("failed to create postgres pool")?;
-    {
-        let client = db.get().await?;
-        client
-            .batch_execute(include_str!("../migrations/0001_create_users.sql"))
-            .await?;
-    }
+    run_migrations(&db).await?;
     let publisher: Arc<dyn EventPublisher> = match &config.nats_url {
         Some(url) => match NatsPublisher::connect(url).await {
             Ok(client) => Arc::new(client),
