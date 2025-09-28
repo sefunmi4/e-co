@@ -36,6 +36,7 @@ uuid = { version = "1.7", features = ["serde", "v4", "v5"] }
 chrono = { version = "0.4", features = ["serde"] }
 deadpool-postgres = { version = "0.14", features = ["rt_tokio_1"] }
 tokio-postgres = { version = "0.7", features = ["with-uuid-1"] }
+dotenvy = "0.15"
 
 matrix-sdk = { version = "0.13", optional = true }
 
