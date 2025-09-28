@@ -32,6 +32,7 @@ tokio-util = { version = "0.7", features = ["codec"] }
 tonic = { version = "0.10", features = ["transport"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+tower-http = { version = "0.5", features = ["cors"] }
 uuid = { version = "1.7", features = ["serde", "v4", "v5"] }
 chrono = { version = "0.4", features = ["serde"] }
 deadpool-postgres = { version = "0.14", features = ["rt_tokio_1"] }
