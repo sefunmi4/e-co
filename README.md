@@ -44,6 +44,24 @@ direnv allow . # if you use direnv + Nix flakes
 nix develop ./distro/nix   # or install Node.js 20 + Rust + CMake manually
 ```
 
+### Configure Environment Variables
+
+Some services (for example, `services/ethos-gateway`) expect a Postgres
+connection string in `ETHOS_DATABASE_URL`. To avoid manually exporting the
+variable each time, copy the sample files and allow `direnv` to load them when
+you enter the repository:
+
+```bash
+cp .env.na .env                # update the credentials to match your setup
+cp .envrc.example .envrc       # optional; customize as needed
+direnv allow .
+```
+
+The `.envrc.example` file loads `.env` (keeping secrets out of version control)
+and falls back to the default `postgres://ethos:ethos@localhost:5432/ethos`
+URL. You can also set the variable globally via your shell profile or
+`~/.cargo/config.toml` if you prefer not to use `direnv`.
+
 ### Bootstrap workspaces
 
 ```bash

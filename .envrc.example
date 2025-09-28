@@ -1,0 +1,11 @@
+# Load database credentials for local development with direnv.
+# Copy this file to `.envrc` and update the connection string if needed.
+# direnv will automatically load the values whenever you `cd` into the repo.
+
+# Prefer sourcing a local .env so secrets stay out of version control.
+if [ -f .env ]; then
+  dotenv .env
+fi
+
+# Fallback to the sample Postgres URL if no .env overrides it.
+export ETHOS_DATABASE_URL=${ETHOS_DATABASE_URL:-"postgres://ethos:ethos@localhost:5432/ethos"}
