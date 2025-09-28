@@ -21,6 +21,8 @@ utilities while the proxies satisfy Next.js' filesystem routing.
 
 ## Development
 
+Install dependencies and launch the combined frontend/backend runtime:
+
 ```bash
 cd apps/web/ether-pod
 npm install
