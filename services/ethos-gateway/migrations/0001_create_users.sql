@@ -24,14 +24,3 @@ ALTER TABLE users
 ALTER TABLE users
     ALTER COLUMN created_at SET NOT NULL;
 
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM users WHERE password_hash IS NULL) THEN
-        RAISE EXCEPTION 'users.password_hash must be populated before running this migration'
-            USING HINT = 'Populate users.password_hash for existing accounts and re-run the migration.';
-    END IF;
-END;
-$$;
-
-ALTER TABLE users
-    ALTER COLUMN password_hash SET NOT NULL;
