@@ -29,7 +29,14 @@ export async function request(path, options = {}) {
     const message = await res.text();
     throw new Error(message || 'Request failed');
   }
-  return res.json();
+  if (res.status === 204 || res.status === 205) {
+    return null;
+  }
+  const contentType = res.headers.get('content-type');
+  if (contentType && contentType.includes('application/json')) {
+    return res.json();
+  }
+  return res.text();
 }
 
 export function register(email, password) {
@@ -48,4 +55,30 @@ export async function login(email, password) {
     setToken(data.token);
   }
   return data;
+}
+
+export async function guestLogin(displayName) {
+  const payload = displayName ? { display_name: displayName } : {};
+  const data = await request('/auth/guest', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  if (data?.token) {
+    setToken(data.token);
+  }
+  return data;
+}
+
+export function getSession() {
+  return request('/auth/session');
+}
+
+export async function logout() {
+  try {
+    await request('/auth/logout', { method: 'POST', body: JSON.stringify({}) });
+  } catch (error) {
+    console.warn('Failed to call logout endpoint', error);
+  } finally {
+    setToken(null);
+  }
 }

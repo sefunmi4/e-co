@@ -32,10 +32,43 @@ Response body:
   "user": {
     "id": "uuid",
     "email": "user@example.com",
-    "display_name": "Ethos Operative"
+    "display_name": "Ethos Operative",
+    "is_guest": false
   }
 }
 ```
+
+### `POST /auth/guest`
+
+Create an ephemeral guest account and return a JWT for temporary access. A
+custom display name can be supplied, otherwise a friendly alias is generated.
+
+Request body:
+
+```json
+{
+  "display_name": "Observer"
+}
+```
+
+Response body (same shape as the login response):
+
+```json
+{
+  "token": "<jwt>",
+  "user": {
+    "id": "uuid",
+    "email": "guest+abc123@ethos.local",
+    "display_name": "Observer",
+    "is_guest": true
+  }
+}
+```
+
+### `POST /auth/logout`
+
+Stateless endpoint that allows clients to record a logout action. Clients should
+discard their cached token after calling this route.
 
 ### `GET /auth/session`
 

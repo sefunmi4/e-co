@@ -33,6 +33,12 @@ pub struct RegisterRequest {
     pub display_name: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct GuestLoginRequest {
+    #[serde(default)]
+    pub display_name: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct SessionResponse {
     pub token: String,
@@ -49,6 +55,7 @@ pub struct SessionUser {
     pub email: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
+    pub is_guest: bool,
 }
 
 struct DbUser {
@@ -56,6 +63,7 @@ struct DbUser {
     email: String,
     password_hash: String,
     display_name: Option<String>,
+    is_guest: bool,
 }
 
 impl DbUser {
@@ -65,6 +73,7 @@ impl DbUser {
             email: row.try_get("email")?,
             password_hash: row.try_get("password_hash")?,
             display_name: row.try_get("display_name")?,
+            is_guest: row.try_get("is_guest")?,
         })
     }
 }
@@ -90,7 +99,7 @@ pub async fn login(
 
     let row = client
         .query_opt(
-            "SELECT id, email, password_hash, display_name FROM users WHERE email = $1",
+            "SELECT id, email, password_hash, display_name, is_guest FROM users WHERE email = $1",
             &[&email],
         )
         .await
@@ -150,8 +159,8 @@ pub async fn register(
     let display_name_param: Option<&str> = normalized_display_name.as_deref();
     let row = client
         .query_one(
-            "INSERT INTO users (id, email, password_hash, display_name) VALUES ($1, $2, $3, $4) \
-             RETURNING id, email, password_hash, display_name",
+            "INSERT INTO users (id, email, password_hash, display_name, is_guest) VALUES ($1, $2, $3, $4, FALSE) \
+             RETURNING id, email, password_hash, display_name, is_guest",
             &[&user_id, &email, &password_hash, &display_name_param],
         )
         .await
@@ -189,6 +198,66 @@ pub async fn register(
     Ok(Json(response))
 }
 
+pub async fn guest_login(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(request): Json<GuestLoginRequest>,
+) -> Result<Json<SessionResponse>, impl IntoResponse> {
+    let mut rng = OsRng;
+    let password = Uuid::new_v4().to_string();
+    let password_hash = Argon2::default()
+        .hash_password(password.as_bytes(), &SaltString::generate(&mut rng))
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to authenticate guest",
+            )
+        })?
+        .to_string();
+
+    let user_id = Uuid::new_v4();
+    let slug = user_id.simple().to_string();
+    let fallback_display = format!("Guest {}", &slug[..8]);
+    let display_name = request
+        .display_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+        .unwrap_or(fallback_display);
+    let email = format!("guest+{}@ethos.local", slug);
+
+    let client = state.db.get().await.map_err(|error| {
+        error!(error = ?error, "failed to acquire database connection for guest login");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to authenticate guest",
+        )
+    })?;
+
+    let row = client
+        .query_one(
+            "INSERT INTO users (id, email, password_hash, display_name, is_guest) VALUES ($1, $2, $3, $4, TRUE) \
+             RETURNING id, email, password_hash, display_name, is_guest",
+            &[&user_id, &email, &password_hash, &display_name],
+        )
+        .await
+        .map_err(|error| {
+            error!(error = ?error, "failed to create guest user");
+            (StatusCode::INTERNAL_SERVER_ERROR, "Failed to authenticate guest")
+        })?;
+    let user = DbUser::from_row(&row).map_err(|error| {
+        error!(error = ?error, "failed to parse guest user record");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to authenticate guest",
+        )
+    })?;
+
+    let response = build_session_response(state.as_ref(), &user, None)?;
+
+    Ok(Json(response))
+}
+
 pub async fn session(
     auth: AuthSession,
     State(state): State<Arc<AppState>>,
@@ -209,8 +278,13 @@ pub async fn session(
             id: auth.user_id,
             email: auth.email,
             display_name: auth.display_name,
+            is_guest: auth.is_guest,
         },
     })
+}
+
+pub async fn logout() -> impl IntoResponse {
+    StatusCode::NO_CONTENT
 }
 
 fn build_session_response(
@@ -222,6 +296,7 @@ fn build_session_response(
         sub: user.id.to_string(),
         email: user.email.clone(),
         display_name: user.display_name.clone(),
+        is_guest: user.is_guest,
         exp: (Utc::now() + Duration::hours(12)).timestamp() as usize,
     };
 
@@ -253,6 +328,7 @@ fn build_session_response(
             id: user.id.to_string(),
             email: user.email.clone(),
             display_name: user.display_name.clone(),
+            is_guest: user.is_guest,
         },
     })
 }
