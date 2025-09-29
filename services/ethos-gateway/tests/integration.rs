@@ -12,7 +12,10 @@ use ethos_gateway::proto::ethos::v1::{
     conversations_service_server::ConversationsService, SendMessageRequest, StreamMessagesRequest,
 };
 use ethos_gateway::router;
-use ethos_gateway::services::{EventPublisher, InMemoryRoomService, RoomService, TestPublisher};
+use ethos_gateway::services::{
+    EventPublisher, InMemoryGuildService, InMemoryQuestService, InMemoryRoomService, RoomService,
+    TestPublisher,
+};
 use ethos_gateway::state::AppState;
 use futures::StreamExt;
 use serde_json::json;
@@ -65,10 +68,20 @@ async fn build_state() -> (
         .await
         .expect("failed to run migrations for tests");
     let room_service = Arc::new(InMemoryRoomService::new());
+    let quest_service = Arc::new(InMemoryQuestService::new());
+    let guild_service = Arc::new(InMemoryGuildService::new());
     let test_publisher = Arc::new(TestPublisher::default());
     let matrix = Arc::new(NullMatrixBridge);
     let publisher: Arc<dyn EventPublisher> = test_publisher.clone();
-    let app_state = AppState::new(config.clone(), db, room_service.clone(), publisher, matrix);
+    let app_state = AppState::new(
+        config.clone(),
+        db,
+        room_service.clone(),
+        publisher,
+        matrix,
+        quest_service,
+        guild_service,
+    );
     (config, app_state, room_service, test_publisher)
 }
 
@@ -182,6 +195,57 @@ async fn rest_conversation_flow() {
             .len(),
         1
     );
+}
+
+#[tokio::test]
+async fn rest_guilds_and_quests_endpoints() {
+    let (_config, app_state, _room_service, _publisher) = build_state().await;
+    let app = router(app_state.clone());
+
+    let quests_response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri("/api/quests")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(quests_response.status(), StatusCode::OK);
+    let quests_body = body::to_bytes(quests_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let quests: serde_json::Value = serde_json::from_slice(&quests_body).unwrap();
+    let quests_array = quests
+        .as_array()
+        .expect("quests response should be an array");
+    assert!(!quests_array.is_empty());
+    assert!(quests_array[0].get("id").is_some());
+    assert!(quests_array[0].get("title").is_some());
+
+    let guilds_response = app
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri("/api/guilds")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(guilds_response.status(), StatusCode::OK);
+    let guilds_body = body::to_bytes(guilds_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let guilds: serde_json::Value = serde_json::from_slice(&guilds_body).unwrap();
+    let guilds_array = guilds
+        .as_array()
+        .expect("guilds response should be an array");
+    assert!(!guilds_array.is_empty());
+    assert!(guilds_array[0].get("id").is_some());
+    assert!(guilds_array[0].get("name").is_some());
 }
 
 #[tokio::test]
