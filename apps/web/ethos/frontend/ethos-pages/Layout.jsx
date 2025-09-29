@@ -48,6 +48,8 @@ import BugReportFormModal from "../components/bug_tracker/BugReportFormModal";
 import TermsOfServiceModal from "../components/legal/TermsOfServiceModal";
 import TutorialOverlay from "../components/tutorial/TutorialOverlay";
 import { getStepsForPage } from "../components/tutorial/tutorialSteps";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { GATEWAY_URL } from "@/api/client";
 
 const navigationItems = [
   {
@@ -118,6 +120,7 @@ export default function Layout({ children, currentPageName: propCurrentPageName 
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [gatewayError, setGatewayError] = useState(null);
 
   const resolvedUserName =
     currentUser?.full_name ||
@@ -154,19 +157,22 @@ export default function Layout({ children, currentPageName: propCurrentPageName 
   }, []); // roleTypeColors is a constant, document/window are stable globals
 
   const fetchUser = useCallback(() => {
+    setGatewayError(null);
     User.me()
       .then((user) => {
         setCurrentUser(user);
         applyUserTheme(user);
-        
+
         // Check if user needs to accept terms
         if (!user.terms_accepted) {
           setShowTermsModal(true);
         }
+        setGatewayError(null);
       })
-      .catch(() => {
+      .catch((error) => {
         setCurrentUser(null);
         setShowTermsModal(false);
+        setGatewayError(error?.hint || error?.message || `Unable to contact the Ethos gateway at ${GATEWAY_URL}.`);
       });
   }, [applyUserTheme]); // applyUserTheme is now a dependency as it's a callback
 
@@ -205,14 +211,15 @@ export default function Layout({ children, currentPageName: propCurrentPageName 
 
   const handleTermsAccept = async () => {
     try {
-      await User.updateMyUserData({ 
-        terms_accepted: true, 
-        terms_accepted_date: new Date().toISOString() 
+      await User.updateMyUserData({
+        terms_accepted: true,
+        terms_accepted_date: new Date().toISOString()
       });
       setShowTermsModal(false);
       fetchUser();
     } catch (error) {
       console.error("Error accepting terms:", error);
+      setGatewayError(error?.hint || error?.message || `Unable to contact the Ethos gateway at ${GATEWAY_URL}.`);
     }
   };
 
@@ -236,11 +243,12 @@ export default function Layout({ children, currentPageName: propCurrentPageName 
           tutorial_progress: updatedProgress,
           tutorial_completed: allPagesCompleted
         });
-        
+
         setShowTutorial(false);
         fetchUser();
       } catch (error) {
         console.error("Error updating tutorial progress:", error);
+        setGatewayError(error?.hint || error?.message || `Unable to contact the Ethos gateway at ${GATEWAY_URL}.`);
       }
     }
   };
@@ -812,6 +820,14 @@ export default function Layout({ children, currentPageName: propCurrentPageName 
           </header>
 
           <div className="content-main">
+            {gatewayError && (
+              <div className="px-4 pt-4">
+                <Alert variant="destructive">
+                  <AlertTitle>Unable to reach the Ethos gateway</AlertTitle>
+                  <AlertDescription>{gatewayError}</AlertDescription>
+                </Alert>
+              </div>
+            )}
             {children}
           </div>
         </main>
