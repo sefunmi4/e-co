@@ -1,4 +1,16 @@
-import { request, logout as apiLogout } from './client';
+import { request, logout as apiLogout, getSession } from './client';
+
+const deriveUserDisplayName = (user) => {
+  if (!user) return 'Guest';
+  if (user.full_name) return user.full_name;
+  if (user.display_name) return user.display_name;
+  if (user.username) return user.username;
+  if (user.email) {
+    const [localPart] = user.email.split('@');
+    if (localPart) return localPart;
+  }
+  return user.id || 'Guest';
+};
 
 const defaultOptions = (sort, limit, page) => ({ sort, limit, page });
 
@@ -88,7 +100,30 @@ export const TeamApplication = {
 export const User = {
   list: (sort, limit, page) => request(`/api/users${buildQuery({}, defaultOptions(sort, limit, page))}`),
   filter: (params = {}, sort, limit, page) => request(`/api/users${buildQuery(params, defaultOptions(sort, limit, page))}`),
-  me: () => request('/api/users/me'),
+  me: async () => {
+    try {
+      return await request('/api/users/me');
+    } catch (error) {
+      const status = typeof error === 'object' && error && 'status' in error ? error.status : undefined;
+      if (status === 404 || status === 501) {
+        const session = await getSession();
+        if (session?.user) {
+          const { user } = session;
+          const displayName = deriveUserDisplayName(user);
+          return {
+            id: user.id,
+            email: user.email,
+            full_name: displayName,
+            display_name: user.display_name ?? displayName,
+            username: user.username ?? (user.email ? user.email.split('@')[0] : undefined),
+            is_guest: Boolean(user.is_guest),
+            role: user.role ?? (user.is_guest ? 'guest' : 'member'),
+          };
+        }
+      }
+      throw error;
+    }
+  },
   updateMyUserData: (data) => request('/api/users/me', { method: 'PUT', body: JSON.stringify(data) }),
   logout: async () => {
     if (typeof window !== 'undefined') {

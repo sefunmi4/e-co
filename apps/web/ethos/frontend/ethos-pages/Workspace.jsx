@@ -107,6 +107,12 @@ export default function Workspace() {
   const [archivedQuests, setArchivedQuests] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview"); // Changed initial tab to 'overview'
+  const resolvedUserName =
+    currentUser?.full_name ||
+    currentUser?.display_name ||
+    currentUser?.username ||
+    (currentUser?.email ? currentUser.email.split('@')[0] : null) ||
+    "Your Workspace";
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -221,7 +227,7 @@ export default function Workspace() {
               </div>
               <div>
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-                  {currentUser?.full_name || "Your Workspace"}
+                  {resolvedUserName}
                 </h1>
                 <p className="text-gray-600 dark:text-gray-300 text-sm sm:text-base">
                   {currentUser?.bio || "Manage your projects and team collaborations"}
