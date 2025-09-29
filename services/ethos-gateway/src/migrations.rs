@@ -9,6 +9,7 @@ use uuid::Uuid;
 const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0001_create_users.sql"),
     include_str!("../migrations/0002_add_is_guest_to_users.sql"),
+    include_str!("../migrations/0003_add_user_profile_data.sql"),
 ];
 
 pub async fn run_migrations(pool: &Pool) -> anyhow::Result<()> {

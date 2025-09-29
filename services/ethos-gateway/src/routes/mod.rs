@@ -12,16 +12,18 @@ use crate::state::AppState;
 mod auth;
 mod conversations;
 mod stream;
+mod users;
 
 pub use auth::*;
 pub use conversations::*;
 pub use stream::*;
+pub use users::*;
 
 pub fn router(state: AppState) -> Router {
     let shared = Arc::new(state);
     let cors = CorsLayer::new()
         .allow_origin(Any)
-        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::OPTIONS])
         .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION]);
 
     Router::new()
@@ -39,6 +41,7 @@ pub fn router(state: AppState) -> Router {
             get(list_messages).post(post_message),
         )
         .route("/api/conversations/:id/stream", get(stream_conversation))
+        .route("/api/users/me", get(me).put(update_me))
         .layer(cors)
         .layer(Extension(shared.clone()))
         .with_state(shared)

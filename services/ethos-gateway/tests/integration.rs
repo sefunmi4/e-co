@@ -38,6 +38,7 @@ fn sign_token(config: &GatewayConfig, user_id: &str, email: &str) -> String {
         sub: user_id.to_string(),
         email: email.to_string(),
         display_name: Some("Test".into()),
+        is_guest: false,
         exp: (chrono::Utc::now() + chrono::Duration::hours(1)).timestamp() as usize,
     };
     jsonwebtoken::encode(
