@@ -30,7 +30,12 @@ export async function request(path, options = {}) {
   const res = await fetch(`${API_URL}${path}`, { ...options, headers });
   if (!res.ok) {
     const message = await res.text();
-    throw new Error(message || 'Request failed');
+    const error = new Error(message || 'Request failed');
+    // Attach the HTTP status code so callers can branch on specific failures.
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore – this file is plain JS so we can annotate ad-hoc properties.
+    error.status = res.status;
+    throw error;
   }
   if (res.status === 204 || res.status === 205) {
     return null;

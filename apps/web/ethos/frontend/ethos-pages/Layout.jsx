@@ -119,6 +119,13 @@ export default function Layout({ children, currentPageName: propCurrentPageName 
   const [tutorialStep, setTutorialStep] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const resolvedUserName =
+    currentUser?.full_name ||
+    currentUser?.display_name ||
+    currentUser?.username ||
+    (currentUser?.email ? currentUser.email.split('@')[0] : null) ||
+    'Guest';
+
   const applyUserTheme = useCallback((user) => {
     const root = document.documentElement;
     const themeMode = user.theme_mode || 'system';
@@ -662,7 +669,7 @@ export default function Layout({ children, currentPageName: propCurrentPageName 
                   </div>
                   <div className="flex-1 min-w-0 hidden lg:block">
                     <p className="font-medium text-gray-900 dark:text-gray-100 text-sm truncate">
-                      {currentUser?.full_name || "Guest"}
+                      {resolvedUserName}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{currentUser?.email}</p>
                   </div>
