@@ -81,7 +81,7 @@ impl DbUser {
 pub async fn login(
     Extension(state): Extension<Arc<AppState>>,
     Json(request): Json<LoginRequest>,
-) -> Result<Json<SessionResponse>, impl IntoResponse> {
+) -> Result<Json<SessionResponse>, (StatusCode, &'static str)> {
     let LoginRequest {
         email,
         password,
@@ -127,7 +127,7 @@ pub async fn login(
 pub async fn register(
     Extension(state): Extension<Arc<AppState>>,
     Json(request): Json<RegisterRequest>,
-) -> Result<Json<SessionResponse>, impl IntoResponse> {
+) -> Result<Json<SessionResponse>, (StatusCode, &'static str)> {
     let RegisterRequest {
         email,
         password,
@@ -201,7 +201,7 @@ pub async fn register(
 pub async fn guest_login(
     Extension(state): Extension<Arc<AppState>>,
     Json(request): Json<GuestLoginRequest>,
-) -> Result<Json<SessionResponse>, impl IntoResponse> {
+) -> Result<Json<SessionResponse>, (StatusCode, &'static str)> {
     let mut rng = OsRng;
     let password = Uuid::new_v4().to_string();
     let password_hash = Argon2::default()
