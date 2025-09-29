@@ -1,7 +1,23 @@
-const API_URL =
+export const GATEWAY_URL =
   process.env.NEXT_PUBLIC_GATEWAY_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
   'http://localhost:8080';
+
+export class GatewayRequestError extends Error {
+  constructor(message, { status, cause, hint } = {}) {
+    super(message);
+    this.name = 'GatewayRequestError';
+    if (status) {
+      this.status = status;
+    }
+    if (cause) {
+      this.cause = cause;
+    }
+    if (hint) {
+      this.hint = hint;
+    }
+  }
+}
 
 export const getToken = () => {
   if (typeof window === 'undefined') {
@@ -27,14 +43,35 @@ export async function request(path, options = {}) {
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  const url = `${GATEWAY_URL}${path}`;
+  let res;
+  try {
+    res = await fetch(url, { ...options, headers });
+  } catch (cause) {
+    throw new GatewayRequestError('Unable to reach the Ethos gateway.', {
+      cause,
+      hint: `Start the gateway locally (\`cargo run -p ethos-gateway\`) or set NEXT_PUBLIC_GATEWAY_URL to the correct base URL. Current value: ${GATEWAY_URL}.`,
+    });
+  }
+
   if (!res.ok) {
-    const message = await res.text();
-    const error = new Error(message || 'Request failed');
-    // Attach the HTTP status code so callers can branch on specific failures.
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore – this file is plain JS so we can annotate ad-hoc properties.
-    error.status = res.status;
+    let message;
+    try {
+      message = await res.text();
+    } catch (readError) {
+      message = null;
+    }
+
+    const error = new GatewayRequestError(message || 'Request failed', {
+      status: res.status,
+    });
+
+    if (res.status === 404) {
+      error.hint = `The gateway at ${GATEWAY_URL} does not provide ${path}. Make sure you are running a compatible gateway or adjust NEXT_PUBLIC_GATEWAY_URL.`;
+    } else if (res.status === 405) {
+      error.hint = `The gateway responded that the ${options.method || 'GET'} method is not allowed for ${path}. Check that your gateway is up to date.`;
+    }
+
     throw error;
   }
   if (res.status === 204 || res.status === 205) {

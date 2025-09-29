@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ArrowRight, Zap, UserPlus, Eye, Star, RotateCcw, Clock } from "lucide-react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
@@ -10,6 +11,7 @@ import { createPageUrl } from "@/utils";
 import { getUserDisplayName } from "../shared/UserDisplay";
 import { TeamApplication, UserFollow, Party, Quest } from "@/api/entities";
 import TeamApplicationModal from "./TeamApplicationModal";
+import { GATEWAY_URL } from "@/api/client";
 
 const roleTypeColors = {
   creator: "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300",
@@ -195,9 +197,11 @@ export default function QuestBoard({ isLoading: initialLoading, currentUser }) {
   const [showAll, setShowAll] = useState(false);
   const [rejectedQuestIds, setRejectedQuestIds] = useState(new Set());
   const [userApplications, setUserApplications] = useState([]);
+  const [loadError, setLoadError] = useState(null);
 
   const loadQuestBoardData = useCallback(async () => {
     setIsLoading(true);
+    setLoadError(null);
     try {
       // Fetch all public quests that have an active request directly
       const publicTeamRequests = await Quest.filter({
@@ -278,10 +282,13 @@ export default function QuestBoard({ isLoading: initialLoading, currentUser }) {
       
       const finalQuests = Array.from(questMap.values());
       setQuests(finalQuests);
-      
+
     } catch (error) {
-        console.error("Error loading Quest Board data:", error);
-        setQuests([]);
+      console.error("Error loading Quest Board data:", error);
+      setQuests([]);
+      setUserApplications([]);
+      setRejectedQuestIds(new Set());
+      setLoadError(error?.hint || error?.message || `Unable to contact the Ethos gateway at ${GATEWAY_URL}.`);
     }
     setIsLoading(false);
   }, [currentUser]);
@@ -311,6 +318,17 @@ export default function QuestBoard({ isLoading: initialLoading, currentUser }) {
           <div className="h-16 bg-gray-100 dark:bg-gray-800 rounded-lg animate-pulse"></div>
           <div className="h-16 bg-gray-100 dark:bg-gray-800 rounded-lg animate-pulse"></div>
         </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="creator-card p-6">
+        <Alert variant="destructive">
+          <AlertTitle>Quest Board is unavailable</AlertTitle>
+          <AlertDescription>{loadError}</AlertDescription>
+        </Alert>
       </div>
     );
   }

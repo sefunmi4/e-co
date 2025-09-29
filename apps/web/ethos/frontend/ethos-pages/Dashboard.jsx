@@ -14,6 +14,8 @@ import {
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { GATEWAY_URL } from "@/api/client";
 
 import QuestCard from "../components/dashboard/QuestCard";
 import StatsOverview from "../components/dashboard/StatsOverview";
@@ -30,6 +32,7 @@ export default function Dashboard() {
   const [userQuests, setUserQuests] = useState([]);
   const [userLikesMap, setUserLikesMap] = useState(new Map());
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filters, setFilters] = useState({
     status: "all",
@@ -40,6 +43,7 @@ export default function Dashboard() {
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
+    setLoadError(null);
     try {
       // Fetch user and basic data first
       const [me, initialGuildData] = await Promise.all([
@@ -162,6 +166,7 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error("Error loading data:", error);
+      setLoadError(error?.hint || error?.message || `Unable to contact the Ethos gateway at ${GATEWAY_URL}.`);
     }
     setIsLoading(false);
   }, []);
@@ -215,6 +220,14 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 md:px-6 py-4 md:py-6 space-y-4 sm:space-y-6 md:space-y-8">
+        {loadError && (
+          <Alert variant="destructive">
+            <AlertTitle>Unable to load dashboard data</AlertTitle>
+            <AlertDescription>
+              {loadError}
+            </AlertDescription>
+          </Alert>
+        )}
         {/* Header */}
         <div className="text-center py-4 sm:py-6 md:py-8">
           <h1 className="text-xl sm:text-2xl md:text-4xl font-bold text-gray-900 dark:text-white mb-2 md:mb-4">
