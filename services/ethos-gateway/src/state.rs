@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     config::GatewayConfig,
     matrix::MatrixBridge,
-    services::{EventPublisher, RoomService},
+    services::{EventPublisher, GuildService, QuestService, RoomService},
 };
 use deadpool_postgres::Pool;
 
@@ -14,6 +14,8 @@ pub struct AppState {
     pub room_service: Arc<dyn RoomService>,
     pub publisher: Arc<dyn EventPublisher>,
     pub matrix: Arc<dyn MatrixBridge>,
+    pub quest_service: Arc<dyn QuestService>,
+    pub guild_service: Arc<dyn GuildService>,
 }
 
 impl AppState {
@@ -23,6 +25,8 @@ impl AppState {
         room_service: Arc<dyn RoomService>,
         publisher: Arc<dyn EventPublisher>,
         matrix: Arc<dyn MatrixBridge>,
+        quest_service: Arc<dyn QuestService>,
+        guild_service: Arc<dyn GuildService>,
     ) -> Self {
         Self {
             config,
@@ -30,6 +34,8 @@ impl AppState {
             room_service,
             publisher,
             matrix,
+            quest_service,
+            guild_service,
         }
     }
 }

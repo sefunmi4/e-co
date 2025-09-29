@@ -11,11 +11,15 @@ use crate::state::AppState;
 
 mod auth;
 mod conversations;
+mod guilds;
+mod quests;
 mod stream;
 mod users;
 
 pub use auth::*;
 pub use conversations::*;
+pub use guilds::*;
+pub use quests::*;
 pub use stream::*;
 pub use users::*;
 
@@ -41,6 +45,16 @@ pub fn router(state: AppState) -> Router {
             get(list_messages).post(post_message),
         )
         .route("/api/conversations/:id/stream", get(stream_conversation))
+        .route("/api/quests", get(list_quests).post(create_quest))
+        .route(
+            "/api/quests/:id",
+            get(get_quest).put(update_quest).delete(delete_quest),
+        )
+        .route("/api/guilds", get(list_guilds).post(create_guild))
+        .route(
+            "/api/guilds/:id",
+            get(get_guild).put(update_guild).delete(delete_guild),
+        )
         .route("/api/users/me", get(me).put(update_me))
         .layer(cors)
         .layer(Extension(shared.clone()))

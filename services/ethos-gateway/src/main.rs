@@ -9,7 +9,10 @@ use ethos_gateway::{
     matrix::matrix_bridge_from_config,
     migrations::run_migrations,
     router,
-    services::{EventPublisher, InMemoryRoomService, NatsPublisher, NoopPublisher, RoomService},
+    services::{
+        EventPublisher, InMemoryGuildService, InMemoryQuestService, InMemoryRoomService,
+        NatsPublisher, NoopPublisher, RoomService,
+    },
     state::AppState,
 };
 use tokio::{net::TcpListener, signal};
@@ -28,6 +31,8 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(http = %config.http_addr, grpc = %config.grpc_addr, "starting ethos-gateway");
 
     let room_service: Arc<dyn RoomService> = Arc::new(InMemoryRoomService::new());
+    let quest_service = Arc::new(InMemoryQuestService::new());
+    let guild_service = Arc::new(InMemoryGuildService::new());
 
     let mut pg_config = PgConfig::new();
     pg_config.url = Some(config.database_url.clone());
@@ -48,7 +53,15 @@ async fn main() -> anyhow::Result<()> {
 
     let matrix = matrix_bridge_from_config(&config).await?;
 
-    let app_state = AppState::new(config.clone(), db, room_service, publisher, matrix);
+    let app_state = AppState::new(
+        config.clone(),
+        db,
+        room_service,
+        publisher,
+        matrix,
+        quest_service,
+        guild_service,
+    );
     let http_router: Router = router(app_state.clone());
     let state = Arc::new(app_state);
 
