@@ -17,6 +17,8 @@ pub struct Claims {
     pub email: String,
     #[serde(default)]
     pub display_name: Option<String>,
+    #[serde(default)]
+    pub is_guest: bool,
     pub exp: usize,
 }
 
@@ -26,6 +28,7 @@ pub struct AuthSession {
     pub email: String,
     pub display_name: Option<String>,
     pub token: String,
+    pub is_guest: bool,
 }
 
 #[derive(Debug)]
@@ -65,6 +68,7 @@ where
             user_id: claims.sub,
             email: claims.email,
             display_name: claims.display_name,
+            is_guest: claims.is_guest,
             token,
         })
     }

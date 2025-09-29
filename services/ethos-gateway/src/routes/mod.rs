@@ -27,6 +27,8 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/auth/login", post(login))
         .route("/auth/register", post(register))
+        .route("/auth/guest", post(guest_login))
+        .route("/auth/logout", post(logout))
         .route("/auth/session", get(session))
         .route(
             "/api/conversations",

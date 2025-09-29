@@ -76,6 +76,24 @@ async fn rest_conversation_flow() {
     let (_config, app_state, room_service, _publisher) = build_state().await;
     let app = router(app_state.clone());
 
+    let register_body = json!({
+        "email": "user@example.com",
+        "password": "password"
+    });
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri("/auth/register")
+                .header("content-type", "application/json")
+                .body(Body::from(register_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
     let body = json!({
         "email": "user@example.com",
         "password": "password"
@@ -98,9 +116,11 @@ async fn rest_conversation_flow() {
         .unwrap();
     let session: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     let token = session["token"].as_str().unwrap();
+    let user_id = session["user"]["id"].as_str().unwrap();
+    assert!(!session["user"]["is_guest"].as_bool().unwrap());
 
     let create_body = json!({
-        "participant_user_ids": ["user@example.com"],
+        "participant_user_ids": [user_id],
         "topic": "Test Room"
     });
     let response = app
@@ -118,10 +138,7 @@ async fn rest_conversation_flow() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    let conversations = room_service
-        .list_conversations("user@example.com")
-        .await
-        .unwrap();
+    let conversations = room_service.list_conversations(user_id).await.unwrap();
     assert_eq!(conversations.len(), 1);
     let conversation_id = conversations[0].id.clone();
 
@@ -164,6 +181,55 @@ async fn rest_conversation_flow() {
             .len(),
         1
     );
+}
+
+#[tokio::test]
+async fn guest_login_provisions_account() {
+    let (_config, app_state, _room_service, _publisher) = build_state().await;
+    let app = router(app_state.clone());
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri("/auth/guest")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({ "display_name": "Spectator" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let session: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let token = session["token"].as_str().unwrap();
+    assert!(session["user"]["email"]
+        .as_str()
+        .unwrap()
+        .starts_with("guest+"));
+    assert_eq!(
+        session["user"]["display_name"].as_str().unwrap(),
+        "Spectator"
+    );
+    assert!(session["user"]["is_guest"].as_bool().unwrap());
+
+    let response = app
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri("/auth/logout")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
 }
 
 #[tokio::test]

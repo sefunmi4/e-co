@@ -6,7 +6,10 @@ use argon2::{
 use deadpool_postgres::Pool;
 use uuid::Uuid;
 
-const MIGRATIONS: &[&str] = &[include_str!("../migrations/0001_create_users.sql")];
+const MIGRATIONS: &[&str] = &[
+    include_str!("../migrations/0001_create_users.sql"),
+    include_str!("../migrations/0002_add_is_guest_to_users.sql"),
+];
 
 pub async fn run_migrations(pool: &Pool) -> anyhow::Result<()> {
     {

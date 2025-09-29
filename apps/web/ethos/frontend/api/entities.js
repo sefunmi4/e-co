@@ -1,4 +1,4 @@
-import { request, setToken } from './client';
+import { request, logout as apiLogout } from './client';
 
 const defaultOptions = (sort, limit, page) => ({ sort, limit, page });
 
@@ -91,13 +91,11 @@ export const User = {
   me: () => request('/api/users/me'),
   updateMyUserData: (data) => request('/api/users/me', { method: 'PUT', body: JSON.stringify(data) }),
   logout: async () => {
-    try {
-      await request('/auth/logout', { method: 'POST' });
-    } catch (error) {
-      console.warn('Failed to call logout endpoint', error);
+    if (typeof window !== 'undefined') {
+      window.location.href = '/logout';
+      return;
     }
-
-    setToken('');
+    await apiLogout();
   },
 };
 
