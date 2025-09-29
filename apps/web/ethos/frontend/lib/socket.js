@@ -1,9 +1,12 @@
 import { io } from "socket.io-client"
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000"
+const gatewayUrl =
+  process.env.NEXT_PUBLIC_GATEWAY_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:8080"
 
 const socket = typeof window !== "undefined"
-  ? io(apiUrl)
+  ? io(gatewayUrl)
   : {
       on: () => void 0,
       off: () => void 0,

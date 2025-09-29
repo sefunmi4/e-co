@@ -1,4 +1,7 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const API_URL =
+  process.env.NEXT_PUBLIC_GATEWAY_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://localhost:8080';
 
 export const getToken = () => {
   if (typeof window === 'undefined') {
