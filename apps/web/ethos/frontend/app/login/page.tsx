@@ -124,7 +124,7 @@ export default function LoginPage() {
         <CardFooter className="flex flex-col space-y-2 text-center text-sm text-muted-foreground">
           <p>
             Need an account?{" "}
-            <Link href="https://ethos.e-co.app/signup" className="font-medium text-primary hover:underline">
+            <Link href="/signup" className="font-medium text-primary hover:underline">
               Request access
             </Link>
           </p>
