@@ -3,19 +3,44 @@ name: CI
 on: [push, pull_request]
 
 jobs:
-  build:
+  javascript:
+    name: ${{ matrix.name }}
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: Ethos Frontend
+            workspace: apps/web/ethos/frontend
+            vitest_config: apps/web/ethos/frontend/vitest.config.ts
+            playwright_config: ''
+          - name: Ether Pod
+            workspace: apps/web/ether-pod
+            vitest_config: apps/web/ether-pod/vitest.config.ts
+            playwright_config: apps/web/ether-pod/playwright.config.ts
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
         with:
           node-version: 20
-      - run: npm ci --workspaces
-      - run: npx vitest run --config web/vitest.config.ts
-      - run: npx vitest run -w runtime
+      - name: Install dependencies
+        run: npm ci --workspace ${{ matrix.workspace }}
+      - name: Run Vitest
+        run: npx vitest run --config ${{ matrix.vitest_config }}
+      - name: Install Playwright Browsers
+        if: ${{ matrix.playwright_config != '' }}
+        working-directory: ${{ matrix.workspace }}
+        run: npx playwright install --with-deps
+      - name: Run Playwright tests
+        if: ${{ matrix.playwright_config != '' }}
+        run: npx playwright test --config ${{ matrix.playwright_config }}
+
+  nix:
+    runs-on: ubuntu-latest
+    needs: javascript
+    steps:
+      - uses: actions/checkout@v3
       - uses: cachix/install-nix-action@v22
         with:
           nix_path: nixpkgs=channel:nixos-23.11\
       - run: nix build .#packages.x86_64-linux.isoImage --accept-flake-config
       - run: nix build .#packages.x86_64-linux.qtExample --accept-flake-config
-\
