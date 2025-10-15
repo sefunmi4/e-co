@@ -68,7 +68,7 @@ async fn reset_database(db: &Pool) {
         .expect("failed to acquire connection for test reset");
     client
         .batch_execute(
-            "TRUNCATE TABLE memberships, quests, guilds, messages, conversations, pod_items, pods, artifacts, orders, users RESTART IDENTITY CASCADE;",
+            "TRUNCATE TABLE order_item_options, order_items, cart_item_options, cart_items, carts, artifact_variant_options, artifact_variants, memberships, quests, guilds, messages, conversations, pod_items, pods, artifacts, orders, users RESTART IDENTITY CASCADE;",
         )
         .await
         .expect("failed to reset database for tests");
@@ -1412,4 +1412,212 @@ async fn grpc_stream_includes_backlog() {
     let mut stream = service.stream_messages(request).await.unwrap().into_inner();
     let first = stream.next().await.unwrap().unwrap();
     assert_eq!(first.message.unwrap().body, "First");
+}
+
+#[tokio::test]
+async fn artifact_variant_cart_checkout_flow() {
+    let (_config, app_state, _room_service, _publisher) = build_state().await;
+    let app = router(app_state.clone());
+
+    let email = format!("buyer+{}@example.com", Uuid::new_v4());
+    register_user(&app, &email, "password").await;
+    let session = login(&app, &email, "password").await;
+    let token = session["token"].as_str().unwrap();
+
+    let artifact_body = json!({
+        "artifact_type": "collectible",
+        "metadata": {"title": "Special Item"}
+    });
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri("/api/artifacts")
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(artifact_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let artifact: serde_json::Value = serde_json::from_slice(
+        &body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let artifact_id = artifact["id"].as_str().unwrap();
+
+    let variant_body = json!({
+        "name": "Standard Edition",
+        "price_cents": 500,
+        "metadata": {"description": "Base variant"},
+        "options": [
+            {
+                "name": "Engraving",
+                "price_cents": 100,
+                "metadata": {"text": "Hello"}
+            }
+        ]
+    });
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri(format!("/api/artifacts/{artifact_id}/variants"))
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(variant_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let variant_detail: serde_json::Value = serde_json::from_slice(
+        &body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let variant_id = variant_detail["variant"]["id"].as_str().unwrap();
+    let option_id = variant_detail["options"][0]["id"].as_str().unwrap();
+
+    let add_item_body = json!({
+        "variant_id": variant_id,
+        "quantity": 2,
+        "option_ids": [option_id],
+    });
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri("/api/cart/items")
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(add_item_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let cart_after_add: serde_json::Value = serde_json::from_slice(
+        &body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(cart_after_add["items"].as_array().unwrap().len(), 1);
+    assert_eq!(cart_after_add["total_cents"].as_i64().unwrap(), 1200);
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri("/api/cart")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let cart_snapshot: serde_json::Value = serde_json::from_slice(
+        &body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(cart_snapshot["total_cents"].as_i64().unwrap(), 1200);
+    let line_item = &cart_snapshot["items"][0];
+    assert_eq!(line_item["item"]["quantity"].as_i64().unwrap(), 2);
+    assert_eq!(line_item["subtotal_cents"].as_i64().unwrap(), 1200);
+
+    let checkout_body = json!({
+        "status": "processing",
+        "metadata": {"note": "integration"}
+    });
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri("/api/orders")
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(checkout_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let order_detail: serde_json::Value = serde_json::from_slice(
+        &body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(order_detail["order"]["total_cents"].as_i64().unwrap(), 1200);
+    assert_eq!(
+        order_detail["items"][0]["options"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        order_detail["items"][0]["options"][0]["option_id"]
+            .as_str()
+            .unwrap(),
+        option_id
+    );
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri("/api/cart")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let cleared_cart: serde_json::Value = serde_json::from_slice(
+        &body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(cleared_cart["items"].as_array().unwrap().len(), 0);
+    assert_eq!(cleared_cart["total_cents"].as_i64().unwrap(), 0);
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri("/api/orders")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let orders_list: serde_json::Value = serde_json::from_slice(
+        &body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(orders_list.as_array().unwrap().len(), 1);
+    assert_eq!(
+        orders_list[0]["order"]["total_cents"].as_i64().unwrap(),
+        1200
+    );
 }
