@@ -13,6 +13,8 @@ use tokio::time::{self, Duration, MissedTickBehavior};
 
 use crate::{auth, services::ChatEvent, state::AppState};
 
+use super::conversations::ensure_conversation_participant;
+
 #[derive(Debug, Deserialize)]
 pub struct StreamQuery {
     pub token: String,
@@ -23,8 +25,10 @@ pub async fn stream_conversation(
     Path(id): Path<String>,
     Extension(state): Extension<Arc<AppState>>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, StatusCode> {
-    let _claims = auth::decode_token(&state.config.jwt_secret, &query.token)
+    let claims = auth::decode_token(&state.config.jwt_secret, &query.token)
         .map_err(|_| StatusCode::UNAUTHORIZED)?;
+
+    let _conversation = ensure_conversation_participant(&state, &id, &claims.sub).await?;
 
     let history = state.room_service.history(&id).await.unwrap_or_default();
     let mut receiver = state
