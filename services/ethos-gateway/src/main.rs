@@ -10,8 +10,8 @@ use ethos_gateway::{
     migrations::run_migrations,
     router,
     services::{
-        EventPublisher, InMemoryGuildService, InMemoryQuestService, InMemoryRoomService,
-        NatsPublisher, NoopPublisher, RoomService,
+        EventPublisher, GuildService, InMemoryRoomService, NatsPublisher, NoopPublisher,
+        PostgresGuildService, PostgresQuestService, QuestService, RoomService,
     },
     state::AppState,
 };
@@ -31,8 +31,6 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(http = %config.http_addr, grpc = %config.grpc_addr, "starting ethos-gateway");
 
     let room_service: Arc<dyn RoomService> = Arc::new(InMemoryRoomService::new());
-    let quest_service = Arc::new(InMemoryQuestService::new());
-    let guild_service = Arc::new(InMemoryGuildService::new());
 
     let mut pg_config = PgConfig::new();
     pg_config.url = Some(config.database_url.clone());
@@ -40,6 +38,8 @@ async fn main() -> anyhow::Result<()> {
         .create_pool(None, NoTls)
         .context("failed to create postgres pool")?;
     run_migrations(&db).await?;
+    let quest_service: Arc<dyn QuestService> = Arc::new(PostgresQuestService::new(db.clone()));
+    let guild_service: Arc<dyn GuildService> = Arc::new(PostgresGuildService::new(db.clone()));
     let publisher: Arc<dyn EventPublisher> = match &config.nats_url {
         Some(url) => match NatsPublisher::connect(url).await {
             Ok(client) => Arc::new(client),

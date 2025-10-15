@@ -5,7 +5,7 @@ use axum::extract::{Path, Query};
 use axum::http::{Request as HttpRequest, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Extension, Router};
-use deadpool_postgres::{Config as PgConfig, Runtime};
+use deadpool_postgres::{Config as PgConfig, Pool};
 use ethos_gateway::auth;
 use ethos_gateway::config::GatewayConfig;
 use ethos_gateway::grpc::ConversationsGrpc;
@@ -18,8 +18,8 @@ use ethos_gateway::proto::ethos::v1::{
 use ethos_gateway::router;
 use ethos_gateway::routes::{stream_conversation, StreamQuery};
 use ethos_gateway::services::{
-    EventPublisher, InMemoryGuildService, InMemoryQuestService, InMemoryRoomService, RoomService,
-    TestPublisher,
+    EventPublisher, GuildService, InMemoryRoomService, PostgresGuildService, PostgresQuestService,
+    QuestService, RoomService, TestPublisher,
 };
 use ethos_gateway::state::AppState;
 use futures::StreamExt;
@@ -61,6 +61,19 @@ fn sign_token(config: &GatewayConfig, user_id: &str, email: &str) -> String {
     .unwrap()
 }
 
+async fn reset_database(db: &Pool) {
+    let client = db
+        .get()
+        .await
+        .expect("failed to acquire connection for test reset");
+    client
+        .batch_execute(
+            "TRUNCATE TABLE memberships, quests, guilds, messages, conversations, pod_items, pods, artifacts, orders, users RESTART IDENTITY CASCADE;",
+        )
+        .await
+        .expect("failed to reset database for tests");
+}
+
 async fn build_state() -> (
     GatewayConfig,
     AppState,
@@ -68,6 +81,14 @@ async fn build_state() -> (
     Arc<TestPublisher>,
 ) {
     let config = make_config();
+    let (app_state, room_service, test_publisher) = build_state_with_config(&config, true).await;
+    (config, app_state, room_service, test_publisher)
+}
+
+async fn build_state_with_config(
+    config: &GatewayConfig,
+    reset_db: bool,
+) -> (AppState, Arc<InMemoryRoomService>, Arc<TestPublisher>) {
     let mut pg_config = PgConfig::new();
     pg_config.url = Some(config.database_url.clone());
     let db = pg_config
@@ -76,9 +97,12 @@ async fn build_state() -> (
     run_migrations(&db)
         .await
         .expect("failed to run migrations for tests");
+    if reset_db {
+        reset_database(&db).await;
+    }
     let room_service = Arc::new(InMemoryRoomService::new());
-    let quest_service = Arc::new(InMemoryQuestService::new());
-    let guild_service = Arc::new(InMemoryGuildService::new());
+    let quest_service: Arc<dyn QuestService> = Arc::new(PostgresQuestService::new(db.clone()));
+    let guild_service: Arc<dyn GuildService> = Arc::new(PostgresGuildService::new(db.clone()));
     let test_publisher = Arc::new(TestPublisher::default());
     let matrix = Arc::new(NullMatrixBridge);
     let publisher: Arc<dyn EventPublisher> = test_publisher.clone();
@@ -91,7 +115,13 @@ async fn build_state() -> (
         quest_service,
         guild_service,
     );
-    (config, app_state, room_service, test_publisher)
+    (app_state, room_service, test_publisher)
+}
+
+async fn rebuild_state(
+    config: &GatewayConfig,
+) -> (AppState, Arc<InMemoryRoomService>, Arc<TestPublisher>) {
+    build_state_with_config(config, false).await
 }
 
 async fn register_user(app: &Router, email: &str, password: &str) -> serde_json::Value {
@@ -148,27 +178,7 @@ async fn login(app: &Router, email: &str, password: &str) -> serde_json::Value {
 
 async fn make_stream_test_state() -> (GatewayConfig, Arc<AppState>, Arc<InMemoryRoomService>) {
     let config = make_config();
-    let mut pg_config = PgConfig::new();
-    pg_config.host = Some("localhost".into());
-    pg_config.user = Some("tester".into());
-    pg_config.dbname = Some("ethos".into());
-    let db = pg_config
-        .create_pool(Some(Runtime::Tokio1), NoTls)
-        .expect("failed to create postgres pool");
-    let room_service = Arc::new(InMemoryRoomService::new());
-    let quest_service = Arc::new(InMemoryQuestService::new());
-    let guild_service = Arc::new(InMemoryGuildService::new());
-    let matrix = Arc::new(NullMatrixBridge);
-    let publisher: Arc<dyn EventPublisher> = Arc::new(TestPublisher::default());
-    let app_state = AppState::new(
-        config.clone(),
-        db,
-        room_service.clone(),
-        publisher,
-        matrix,
-        quest_service,
-        guild_service,
-    );
+    let (app_state, room_service, _) = build_state_with_config(&config, true).await;
     (config, Arc::new(app_state), room_service)
 }
 
@@ -469,53 +479,192 @@ fn parse_sse_fields(bytes: &[u8]) -> HashMap<String, String> {
 
 #[tokio::test]
 async fn rest_guilds_and_quests_endpoints() {
-    let (_config, app_state, _room_service, _publisher) = build_state().await;
+    let (config, app_state, _room_service, _publisher) = build_state().await;
     let app = router(app_state.clone());
 
-    let quests_response = app
+    let email = format!("guilds+{}@example.com", Uuid::new_v4());
+    register_user(&app, &email, "password").await;
+    let session = login(&app, &email, "password").await;
+    let token = session["token"].as_str().unwrap();
+
+    let guild_create = json!({
+        "name": "Integration Guild",
+        "description": "Initial description",
+    });
+    let guild_response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri("/api/guilds")
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(guild_create.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(guild_response.status(), StatusCode::CREATED);
+    let guild_body = body::to_bytes(guild_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let guild_json: serde_json::Value = serde_json::from_slice(&guild_body).unwrap();
+    let guild_id = guild_json["id"].as_str().unwrap().to_string();
+
+    let quest_create = json!({
+        "title": "Quest Persistence",
+        "description": "Ensure quests survive pool resets",
+        "status": "open",
+    });
+    let quest_response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri("/api/quests")
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(quest_create.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(quest_response.status(), StatusCode::CREATED);
+    let quest_body = body::to_bytes(quest_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let quest_json: serde_json::Value = serde_json::from_slice(&quest_body).unwrap();
+    let quest_id = quest_json["id"].as_str().unwrap().to_string();
+
+    let quest_update = json!({
+        "title": "Quest Persistence Updated",
+    });
+    let update_quest_response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("PUT")
+                .uri(format!("/api/quests/{quest_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(quest_update.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(update_quest_response.status(), StatusCode::OK);
+
+    let guild_update = json!({
+        "description": "Updated description",
+    });
+    let update_guild_response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("PUT")
+                .uri(format!("/api/guilds/{guild_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(guild_update.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(update_guild_response.status(), StatusCode::OK);
+
+    let (persisted_state, _, _) = rebuild_state(&config).await;
+    let persisted_app = router(persisted_state.clone());
+
+    let quest_get_response = persisted_app
         .clone()
         .oneshot(
             HttpRequest::builder()
                 .method("GET")
-                .uri("/api/quests")
+                .uri(format!("/api/quests/{quest_id}"))
                 .body(Body::empty())
                 .unwrap(),
         )
         .await
         .unwrap();
-    assert_eq!(quests_response.status(), StatusCode::OK);
-    let quests_body = body::to_bytes(quests_response.into_body(), usize::MAX)
+    assert_eq!(quest_get_response.status(), StatusCode::OK);
+    let quest_get_body = body::to_bytes(quest_get_response.into_body(), usize::MAX)
         .await
         .unwrap();
-    let quests: serde_json::Value = serde_json::from_slice(&quests_body).unwrap();
-    let quests_array = quests
-        .as_array()
-        .expect("quests response should be an array");
-    assert!(!quests_array.is_empty());
-    assert!(quests_array[0].get("id").is_some());
-    assert!(quests_array[0].get("title").is_some());
+    let quest_after: serde_json::Value = serde_json::from_slice(&quest_get_body).unwrap();
+    assert_eq!(quest_after["title"], "Quest Persistence Updated");
 
-    let guilds_response = app
+    let guild_get_response = persisted_app
+        .clone()
         .oneshot(
             HttpRequest::builder()
                 .method("GET")
-                .uri("/api/guilds")
+                .uri(format!("/api/guilds/{guild_id}"))
                 .body(Body::empty())
                 .unwrap(),
         )
         .await
         .unwrap();
-    assert_eq!(guilds_response.status(), StatusCode::OK);
-    let guilds_body = body::to_bytes(guilds_response.into_body(), usize::MAX)
+    assert_eq!(guild_get_response.status(), StatusCode::OK);
+    let guild_get_body = body::to_bytes(guild_get_response.into_body(), usize::MAX)
         .await
         .unwrap();
-    let guilds: serde_json::Value = serde_json::from_slice(&guilds_body).unwrap();
-    let guilds_array = guilds
-        .as_array()
-        .expect("guilds response should be an array");
-    assert!(!guilds_array.is_empty());
-    assert!(guilds_array[0].get("id").is_some());
-    assert!(guilds_array[0].get("name").is_some());
+    let guild_after: serde_json::Value = serde_json::from_slice(&guild_get_body).unwrap();
+    assert_eq!(guild_after["description"], "Updated description");
+
+    let delete_quest_response = persisted_app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("DELETE")
+                .uri(format!("/api/quests/{quest_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(delete_quest_response.status(), StatusCode::NO_CONTENT);
+
+    let delete_guild_response = persisted_app
+        .oneshot(
+            HttpRequest::builder()
+                .method("DELETE")
+                .uri(format!("/api/guilds/{guild_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(delete_guild_response.status(), StatusCode::NO_CONTENT);
+
+    let (after_delete_state, _, _) = rebuild_state(&config).await;
+    let after_delete_app = router(after_delete_state);
+
+    let quest_missing = after_delete_app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri(format!("/api/quests/{quest_id}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(quest_missing.status(), StatusCode::NOT_FOUND);
+
+    let guild_missing = after_delete_app
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri(format!("/api/guilds/{guild_id}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(guild_missing.status(), StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
