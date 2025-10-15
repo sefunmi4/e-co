@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { readEcoManifest } from '@backend/lib/ethosGateway';
+import { readEcoManifest } from '@backend/lib/worldManifests';
 
 interface Params {
   params: {
