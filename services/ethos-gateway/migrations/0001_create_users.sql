@@ -1,3 +1,4 @@
+-- migrate:up
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,
@@ -24,3 +25,5 @@ ALTER TABLE users
 ALTER TABLE users
     ALTER COLUMN created_at SET NOT NULL;
 
+-- migrate:down
+-- users table is foundational and is intentionally left untouched on rollback.

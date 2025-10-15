@@ -6,11 +6,99 @@ use argon2::{
 use deadpool_postgres::Pool;
 use uuid::Uuid;
 
-const MIGRATIONS: &[&str] = &[
-    include_str!("../migrations/0001_create_users.sql"),
-    include_str!("../migrations/0002_add_is_guest_to_users.sql"),
-    include_str!("../migrations/0003_add_user_profile_data.sql"),
+#[derive(Clone, Copy)]
+struct Migration {
+    name: &'static str,
+    sql: &'static str,
+}
+
+impl Migration {
+    const fn new(name: &'static str, sql: &'static str) -> Self {
+        Self { name, sql }
+    }
+
+    fn up_sql(&self) -> &'static str {
+        let (up, _) = migration_sections(self.sql);
+        up
+    }
+
+    fn down_sql(&self) -> Option<&'static str> {
+        let (_, down) = migration_sections(self.sql);
+        down
+    }
+}
+
+const MIGRATIONS: &[Migration] = &[
+    Migration::new(
+        "0001_create_users.sql",
+        include_str!("../migrations/0001_create_users.sql"),
+    ),
+    Migration::new(
+        "0002_add_is_guest_to_users.sql",
+        include_str!("../migrations/0002_add_is_guest_to_users.sql"),
+    ),
+    Migration::new(
+        "0003_add_user_profile_data.sql",
+        include_str!("../migrations/0003_add_user_profile_data.sql"),
+    ),
+    Migration::new(
+        "0004_create_pods.sql",
+        include_str!("../migrations/0004_create_pods.sql"),
+    ),
+    Migration::new(
+        "0005_create_artifacts.sql",
+        include_str!("../migrations/0005_create_artifacts.sql"),
+    ),
+    Migration::new(
+        "0006_create_pod_items.sql",
+        include_str!("../migrations/0006_create_pod_items.sql"),
+    ),
+    Migration::new(
+        "0007_create_orders.sql",
+        include_str!("../migrations/0007_create_orders.sql"),
+    ),
+    Migration::new(
+        "0008_create_quests.sql",
+        include_str!("../migrations/0008_create_quests.sql"),
+    ),
+    Migration::new(
+        "0009_create_guilds.sql",
+        include_str!("../migrations/0009_create_guilds.sql"),
+    ),
+    Migration::new(
+        "0010_create_memberships.sql",
+        include_str!("../migrations/0010_create_memberships.sql"),
+    ),
+    Migration::new(
+        "0011_create_conversations.sql",
+        include_str!("../migrations/0011_create_conversations.sql"),
+    ),
+    Migration::new(
+        "0012_create_messages.sql",
+        include_str!("../migrations/0012_create_messages.sql"),
+    ),
 ];
+
+fn migration_sections(sql: &'static str) -> (&'static str, Option<&'static str>) {
+    let (up_section, down_section) = if let Some((up, down)) = sql.split_once("-- migrate:down") {
+        (up, Some(down))
+    } else {
+        (sql, None)
+    };
+
+    let up = if let Some((_, body)) = up_section.split_once("-- migrate:up") {
+        body
+    } else {
+        up_section
+    };
+
+    let up = up.trim();
+    let down = down_section
+        .map(str::trim)
+        .filter(|section| !section.is_empty());
+
+    (up, down)
+}
 
 pub async fn run_migrations(pool: &Pool) -> anyhow::Result<()> {
     {
@@ -20,10 +108,15 @@ pub async fn run_migrations(pool: &Pool) -> anyhow::Result<()> {
             .context("failed to acquire postgres client for migrations")?;
 
         for migration in MIGRATIONS {
-            client
-                .batch_execute(migration)
-                .await
-                .context("failed to execute database migration")?;
+            let up_sql = migration.up_sql();
+
+            if up_sql.is_empty() {
+                continue;
+            }
+
+            client.batch_execute(up_sql).await.with_context(|| {
+                format!("failed to execute database migration {}", migration.name)
+            })?;
         }
     }
 
@@ -97,4 +190,11 @@ pub async fn run_migrations(pool: &Pool) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+pub fn down_migrations() -> impl Iterator<Item = (&'static str, &'static str)> {
+    MIGRATIONS
+        .iter()
+        .rev()
+        .filter_map(|migration| migration.down_sql().map(|sql| (migration.name, sql)))
 }
