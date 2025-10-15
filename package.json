@@ -1,13 +1,14 @@
 {
   "private": true,
   "workspaces": [
-    "apps/web/pod-world",
+    "apps/web/ethos/frontend",
+    "apps/web/ether-pod",
     "sdks/js"
   ],
   "scripts": {
-    "lint": "npm run lint -w apps/web/pod-world",
-    "test": "npm run build -w sdks/js && npm run test -w sdks/js && npm run test -w apps/web/pod-world",
-    "build": "npm run build -w sdks/js"
+    "lint": "npm run lint -w apps/web/ethos/frontend && npm run lint -w apps/web/ether-pod",
+    "test": "npm run build -w sdks/js && npm run test -w sdks/js && npm run test -w apps/web/ethos/frontend && npm run test -w apps/web/ether-pod",
+    "build": "npm run build -w sdks/js && npm run build -w apps/web/ethos/frontend && npm run build -w apps/web/ether-pod"
   },
   "devDependencies": {
     "eslint": "^8.56.0",
