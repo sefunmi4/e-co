@@ -23,7 +23,7 @@ The services communicate over localhost by default but can be deployed across no
 
 ## Application Surfaces
 
-- **Pod World Web (`apps/web/pod-world`)** – Next.js 14 app with Bevy WASM canvas, command palette, environment manager, and SymbolCast dashboard.
+- **Ether Pod Web (`apps/web/ether-pod`)** – Next.js 14 app with Bevy WASM canvas, command palette, environment manager, and SymbolCast dashboard.
 - **Ethos Web (`apps/web/ethos`)** – Dedicated frontend + backend packages that power the Ethos experience.
 - **Desktop (`apps/desktop`)** – Tauri shell (planned) embedding the web app, bridging OS-level hotkeys and offline caches.
 - **Wallpaper (`apps/wallpaper`)** – Native hosts that project Bevy scenes behind desktop windows and listen for portal updates via NATS.

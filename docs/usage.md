@@ -19,11 +19,11 @@ npm run build     # compiles the JS SDK used by the web shell
 ## Running the Web Shell
 
 ```bash
-cd apps/web/pod-world
+cd apps/web/ether-pod
 npm run dev
 ```
 
-The development server runs on `http://localhost:3000`. Environment definitions live in `shared/environments.json` and are copied to `apps/web/pod-world/public/environments.json` automatically by the `copy-env` script.
+The development server runs on `http://localhost:3000`. Environment definitions live in `shared/environments.json` and are copied to `apps/web/ether-pod/public/environments.json` automatically by the `copy-env` script.
 
 ## Testing
 
@@ -47,4 +47,4 @@ The shell provides Node.js, Rust, Protobuf, and CMake. It is the recommended env
 
 ## Adding Assets
 
-Place shared background assets in `apps/web/pod-world/public/` and reference them from `shared/environments.json`. For custom Bevy worlds, extend the manifest registry with new component IDs and load them via dynamic modules.
+Place shared background assets in `apps/web/ether-pod/public/` and reference them from `shared/environments.json`. For custom Bevy worlds, extend the manifest registry with new component IDs and load them via dynamic modules.

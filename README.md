@@ -72,11 +72,11 @@ npm run build            # builds the JS SDK so the web app can import it
 ### Run the Web Shell (Next.js)
 
 ```bash
-cd apps/web/pod-world
+cd apps/web/ether-pod
 npm run dev
 ```
 
-The page loads a Bevy-powered procedural terrain canvas, SymbolCast mock UI, and window manager overlay. Environment metadata is pulled from `shared/environments.json` and mirrored into `apps/web/pod-world/public/environments.json` during the build step.
+The page loads a Bevy-powered procedural terrain canvas, SymbolCast mock UI, and window manager overlay. Environment metadata is pulled from `shared/environments.json` and mirrored into `apps/web/ether-pod/public/environments.json` during the build step.
 
 ### Test the shared SDKs
 
