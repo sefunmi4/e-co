@@ -53,16 +53,15 @@ pub struct GatewayConfig {
 impl GatewayConfig {
     fn from_config_file() -> anyhow::Result<Option<Self>> {
         let explicit_path = env::var("ECO_CONFIG_PATH").ok();
-        let candidate_path = explicit_path
-            .as_deref()
-            .unwrap_or(DEFAULT_CONFIG_PATH);
+        let candidate_path = explicit_path.as_deref().unwrap_or(DEFAULT_CONFIG_PATH);
 
         let contents = match fs::read_to_string(candidate_path) {
             Ok(contents) => contents,
             Err(error) => {
                 if explicit_path.is_some() || error.kind() != io::ErrorKind::NotFound {
-                    return Err(error)
-                        .with_context(|| format!("failed to read config file at {}", candidate_path));
+                    return Err(error).with_context(|| {
+                        format!("failed to read config file at {}", candidate_path)
+                    });
                 }
 
                 return Ok(None);
