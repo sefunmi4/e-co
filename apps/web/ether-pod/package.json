@@ -4,16 +4,19 @@
   "private": true,
   "scripts": {
     "copy-env": "node scripts/copy-env.js",
-    "pretest": "npm run copy-env",
-    "dev": "npm run copy-env && next dev",
-    "build": "npm run copy-env && next build",
-    "start": "next start",
+    "generate:config": "node scripts/generate-config.cjs",
+    "sync-config": "npm --prefix ../../../packages/config run build && npm run generate:config",
+    "pretest": "npm run copy-env && npm run sync-config",
+    "dev": "npm run copy-env && npm run sync-config && next dev",
+    "build": "npm run copy-env && npm run sync-config && next build",
+    "start": "npm run sync-config && next start",
     "lint": "next lint",
     "test": "vitest run",
     "test:e2e": "playwright test"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.9.0",
+    "@e-co/config": "file:../../../../packages/config",
     "@connectrpc/connect": "^2.1.0",
     "@connectrpc/connect-web": "^2.1.0",
     "@react-three/drei": "^9.86.5",

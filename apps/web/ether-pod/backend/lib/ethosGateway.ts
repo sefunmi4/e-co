@@ -1,3 +1,4 @@
+import { env } from '@e-co/config';
 import { createPromiseClient, type Interceptor } from '@connectrpc/connect';
 import { createConnectTransport } from '@connectrpc/connect-web';
 import type { PromiseClient } from '@connectrpc/connect';
@@ -11,8 +12,7 @@ import type { PlainMessage } from '@bufbuild/protobuf';
 
 type ConversationsClient = PromiseClient<typeof ConversationsService>;
 
-const resolveGateway = () =>
-  process.env.ETHOS_GATEWAY ?? process.env.NEXT_PUBLIC_ETHOS_GATEWAY ?? 'http://localhost:8080';
+const resolveGateway = () => env.etherPod.gatewayUrl;
 
 const buildClient = (token?: string): ConversationsClient => {
   const transport = createConnectTransport({
@@ -65,8 +65,7 @@ export interface SymbolCastAction {
 }
 
 export const relaySymbolCastAction = async (action: SymbolCastAction) => {
-  const endpoint =
-    process.env.SYMBOLCAST_GATEWAY ?? `${resolveGateway().replace(/\/$/, '')}/symbolcast`; // best-effort default
+  const endpoint = env.etherPod.symbolcastGatewayUrl;
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

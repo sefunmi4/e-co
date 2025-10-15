@@ -1,10 +1,9 @@
+import { env } from '@e-co/config';
 import { error as logError } from '@eco/js-sdk/logger';
 
-const resolveEcoApiBase = () =>
-  process.env.ECO_API_URL ?? process.env.NEXT_PUBLIC_ECO_API_URL ?? 'http://localhost:8080';
+const resolveEcoApiBase = () => env.etherPod.ecoApiUrl;
 
-const resolveIndexerBase = () =>
-  process.env.ECO_INDEXER_URL ?? process.env.NEXT_PUBLIC_ECO_INDEXER_URL ?? null;
+const resolveIndexerBase = () => env.etherPod.ecoIndexerUrl;
 
 export interface PodSnapshot {
   artifact_id: string;

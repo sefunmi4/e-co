@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
+import { env } from '@e-co/config';
 import { parse as parseToml } from 'toml';
 
 export interface WorldCard {
@@ -14,7 +15,7 @@ export interface WorldCard {
 
 const resolveWorldRoot = () => {
   const candidates = [
-    process.env.ECO_MANIFEST_ROOT,
+    env.etherPod.manifestRoot ?? undefined,
     path.resolve(process.cwd(), 'examples/worlds'),
     path.resolve(process.cwd(), '../examples/worlds'),
     path.resolve(process.cwd(), '../../examples/worlds'),
@@ -34,7 +35,7 @@ const worldRoot = resolveWorldRoot();
 
 export const searchWorldCards = async (query: string, limit = 6): Promise<WorldCard[]> => {
   const trimmed = query.trim();
-  const gateway = process.env.ECO_API_URL ?? 'http://localhost:8080';
+  const gateway = env.etherPod.ecoApiUrl;
 
   if (trimmed) {
     try {

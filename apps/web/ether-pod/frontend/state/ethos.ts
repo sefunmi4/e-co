@@ -1,5 +1,6 @@
 "use client";
 
+import { env } from "@e-co/config";
 import { create } from "zustand";
 import type { StoreApi } from "zustand";
 import {
@@ -74,8 +75,7 @@ export interface EthosState {
   sendMessage: (conversationId: string, body: string) => Promise<void>;
 }
 
-const resolveGatewayUrl = () =>
-  process.env.NEXT_PUBLIC_ETHOS_GATEWAY ?? "http://localhost:8080";
+const resolveGatewayUrl = () => env.etherPod.gatewayUrl;
 
 const LOCAL_STORAGE_KEY = "ethos.session";
 
@@ -195,12 +195,12 @@ const resolveSessionFromEnv = (): EthosSession | undefined => {
     }
   }
 
-  const token = process.env.NEXT_PUBLIC_ETHOS_TOKEN;
+  const token = env.ethos.token;
   if (!token) return undefined;
   return {
     token,
-    userId: process.env.NEXT_PUBLIC_ETHOS_USER_ID ?? "guest",
-    displayName: process.env.NEXT_PUBLIC_ETHOS_DISPLAY_NAME ?? "Guest",
+    userId: env.ethos.userId,
+    displayName: env.ethos.displayName,
   };
 };
 

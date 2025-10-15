@@ -1,17 +1,11 @@
+import { env } from "@e-co/config";
 import { io } from "socket.io-client";
 
-const env = typeof process !== "undefined" ? process.env ?? {} : {};
-
-const gatewayUrl =
-  env.NEXT_PUBLIC_GATEWAY_URL ||
-  env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:8080";
+const gatewayUrl = env.web.gatewayUrl;
 
 const isBrowser = typeof window !== "undefined";
 const shouldConnect =
-  isBrowser &&
-  (env.NEXT_PUBLIC_ENABLE_SOCKET_IO === "true" ||
-    env.NEXT_PUBLIC_ENABLE_SOCKET === "true");
+  isBrowser && (env.web.enableSocketIo || env.web.enableSocket);
 
 const createNoopSocket = () => ({
   on: () => void 0,

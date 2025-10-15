@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
+    "generate:config": "node scripts/generate-config.cjs",
+    "predev": "npm --prefix ../../../../packages/config run build && npm run generate:config",
+    "prebuild": "npm --prefix ../../../../packages/config run build && npm run generate:config",
+    "prestart": "npm --prefix ../../../../packages/config run build && npm run generate:config",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -12,6 +16,7 @@
   },
   "dependencies": {
     "@base44/sdk": "^0.1.2",
+    "@e-co/config": "file:../../../../packages/config",
     "@radix-ui/react-accordion": "^1.2.3",
     "@radix-ui/react-alert-dialog": "^1.1.6",
     "@radix-ui/react-aspect-ratio": "^1.1.2",
