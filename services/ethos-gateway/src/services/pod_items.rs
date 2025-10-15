@@ -89,10 +89,22 @@ pub async fn create_pod_item(
         .context("acquire connection for create_pod_item")?;
     let id = Uuid::new_v4();
     let stored_data = PgJson(item_data);
+    let position = match position {
+        Some(position) => position,
+        None => {
+            let row = client
+                .query_one(
+                    "SELECT COALESCE(MAX(position) + 1, 0) FROM pod_items WHERE pod_id = $1",
+                    &[&pod_id],
+                )
+                .await?;
+            row.try_get(0)?
+        }
+    };
     let row = client
         .query_one(
             "INSERT INTO pod_items (id, pod_id, artifact_id, item_type, item_data, position) \
-             VALUES ($1, $2, $3, $4, $5, COALESCE($6, 0)) \
+             VALUES ($1, $2, $3, $4, $5, $6) \
              RETURNING id, pod_id, artifact_id, item_type, item_data, position, created_at",
             &[
                 &id,
