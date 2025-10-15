@@ -475,7 +475,6 @@ async fn rest_pod_crud_and_publish_endpoints() {
     let create_item = json!({
         "item_type": "note",
         "item_data": { "text": "First entry" },
-        "position": 1,
     });
     let response = app
         .clone()
@@ -623,6 +622,110 @@ async fn rest_pod_crud_and_publish_endpoints() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn rest_pod_items_auto_positioning() {
+    let (_config, app_state, _room_service, _publisher) = build_state().await;
+    let app = router(app_state.clone());
+
+    let email = format!("pod-item-auto+{}@example.com", Uuid::new_v4());
+    let session = register_user(&app, &email, "password").await;
+    let token = session["token"].as_str().unwrap();
+
+    let create_pod = json!({
+        "title": "Auto Position Pod",
+        "description": "Testing auto positions",
+    });
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri("/api/pods")
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(create_pod.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let bytes = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let pod: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let pod_id = pod["id"].as_str().unwrap();
+
+    let first_item_body = json!({
+        "item_type": "note",
+        "item_data": { "text": "First" },
+    });
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri(format!("/api/pods/{pod_id}/items"))
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(first_item_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let bytes = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let first_item: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(first_item["position"].as_i64().unwrap(), 0);
+
+    let second_item_body = json!({
+        "item_type": "note",
+        "item_data": { "text": "Second" },
+    });
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri(format!("/api/pods/{pod_id}/items"))
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(second_item_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let bytes = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let second_item: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(second_item["position"].as_i64().unwrap(), 1);
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri(format!("/api/pods/{pod_id}/items"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let items: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let items = items.as_array().unwrap();
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0]["position"].as_i64().unwrap(), 0);
+    assert_eq!(items[1]["position"].as_i64().unwrap(), 1);
 }
 
 #[tokio::test]
