@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { searchWorldCards } from '@backend/lib/ethosGateway';
+import { searchWorldCards } from '@backend/lib/worldManifests';
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
