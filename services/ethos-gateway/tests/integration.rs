@@ -1,8 +1,10 @@
 use std::{env, sync::Arc};
 
 use axum::body::{self, Body};
+use axum::extract::{Path, Query};
 use axum::http::{Request as HttpRequest, StatusCode};
-use axum::Router;
+use axum::response::IntoResponse;
+use axum::{Extension, Router};
 use deadpool_postgres::Config as PgConfig;
 use ethos_gateway::auth;
 use ethos_gateway::config::GatewayConfig;
@@ -10,16 +12,21 @@ use ethos_gateway::grpc::ConversationsGrpc;
 use ethos_gateway::matrix::NullMatrixBridge;
 use ethos_gateway::migrations::run_migrations;
 use ethos_gateway::proto::ethos::v1::{
-    conversations_service_server::ConversationsService, SendMessageRequest, StreamMessagesRequest,
+    conversations_service_server::ConversationsService, PresenceEvent, SendMessageRequest,
+    StreamMessagesRequest,
 };
 use ethos_gateway::router;
+use ethos_gateway::routes::{stream_conversation, StreamQuery};
 use ethos_gateway::services::{
     EventPublisher, InMemoryGuildService, InMemoryQuestService, InMemoryRoomService, RoomService,
     TestPublisher,
 };
 use ethos_gateway::state::AppState;
 use futures::StreamExt;
+use http_body_util::BodyExt;
 use serde_json::json;
+use std::collections::HashMap;
+use tokio::time::Duration;
 use tokio_postgres::NoTls;
 use tonic::Request as GrpcRequest;
 use tower::ServiceExt;
@@ -209,6 +216,141 @@ async fn rest_conversation_flow() {
             .len(),
         1
     );
+}
+
+#[tokio::test(start_paused = true)]
+async fn stream_conversation_emits_presence_snapshots() {
+    let config = make_config();
+    let mut pg_config = PgConfig::new();
+    pg_config.host = Some("localhost".into());
+    pg_config.user = Some("tester".into());
+    pg_config.dbname = Some("ethos".into());
+    let db = pg_config
+        .create_pool(Some(deadpool_postgres::Runtime::Tokio1), NoTls)
+        .expect("failed to create postgres pool");
+    let room_service = Arc::new(InMemoryRoomService::new());
+    let quest_service = Arc::new(InMemoryQuestService::new());
+    let guild_service = Arc::new(InMemoryGuildService::new());
+    let test_publisher = Arc::new(TestPublisher::default());
+    let matrix = Arc::new(NullMatrixBridge);
+    let publisher: Arc<dyn EventPublisher> = test_publisher.clone();
+    let app_state = AppState::new(
+        config.clone(),
+        db,
+        room_service.clone(),
+        publisher,
+        matrix,
+        quest_service,
+        guild_service,
+    );
+    let state = Arc::new(app_state);
+
+    let user_id = "user-1".to_string();
+    let conversation = room_service
+        .create_conversation(vec![user_id.clone()], Some("Test Room".into()))
+        .await
+        .unwrap();
+
+    let initial_presence = PresenceEvent {
+        user_id: user_id.clone(),
+        state: 2,
+        updated_at: 1,
+    };
+    room_service
+        .update_presence(initial_presence)
+        .await
+        .unwrap();
+
+    let token = sign_token(&config, &user_id, "user@example.com");
+    let response = stream_conversation(
+        Query(StreamQuery { token }),
+        Path(conversation.id.clone()),
+        Extension(state),
+    )
+    .await
+    .unwrap()
+    .into_response();
+
+    let mut body = response.into_body();
+
+    let first_payload = next_presence_payload(&mut body).await;
+    assert_eq!(first_payload["type"], "presence");
+    let initial_snapshot = serde_json::to_value(room_service.presence_snapshot().await).unwrap();
+    assert_eq!(first_payload["presence"], initial_snapshot);
+
+    let updated_presence = PresenceEvent {
+        user_id: user_id.clone(),
+        state: 4,
+        updated_at: 2,
+    };
+    let updated_presence_json = serde_json::to_value(updated_presence.clone()).unwrap();
+    room_service
+        .update_presence(updated_presence)
+        .await
+        .unwrap();
+    tokio::task::yield_now().await;
+
+    let realtime_payload = next_presence_payload(&mut body).await;
+    assert_eq!(realtime_payload["type"], "presence");
+    assert_eq!(realtime_payload["presence"], updated_presence_json);
+
+    tokio::time::advance(Duration::from_secs(10)).await;
+    tokio::task::yield_now().await;
+
+    let periodic_payload = next_presence_payload(&mut body).await;
+    assert_eq!(periodic_payload["type"], "presence");
+    let refreshed_snapshot = serde_json::to_value(room_service.presence_snapshot().await).unwrap();
+    assert_eq!(periodic_payload["presence"], refreshed_snapshot);
+}
+
+async fn next_presence_payload(body: &mut Body) -> serde_json::Value {
+    loop {
+        let frame = body
+            .frame()
+            .await
+            .expect("SSE stream should continue")
+            .expect("frame should decode");
+        let data = match frame.into_data() {
+            Ok(data) => data,
+            Err(_) => continue,
+        };
+        let fields = parse_sse_fields(data.as_ref());
+        if fields.get("event").map(String::as_str) != Some("presence") {
+            continue;
+        }
+        if let Some(payload) = fields.get("data") {
+            break serde_json::from_str(payload).expect("presence payload to be valid JSON");
+        }
+    }
+}
+
+fn parse_sse_fields(bytes: &[u8]) -> HashMap<String, String> {
+    let mut fields = HashMap::new();
+    for raw_line in bytes.split(|b| *b == b'\n') {
+        if raw_line.is_empty() {
+            continue;
+        }
+        let line = raw_line.strip_suffix(&[b'\r']).unwrap_or(raw_line);
+        if line.is_empty() {
+            continue;
+        }
+        if line[0] == b':' {
+            fields.insert(
+                "comment".to_string(),
+                String::from_utf8_lossy(&line[1..]).trim().to_string(),
+            );
+            continue;
+        }
+        let mut parts = line.splitn(2, |b| *b == b':');
+        let key = parts.next().unwrap();
+        let value = parts.next().unwrap_or(&[]);
+        let key = String::from_utf8_lossy(key).to_string();
+        let value = String::from_utf8_lossy(value).trim_start().to_string();
+        if !key.is_empty() {
+            fields.insert(key, value);
+        }
+    }
+    fields
 }
 
 #[tokio::test]

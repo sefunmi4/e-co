@@ -9,6 +9,7 @@ use axum::{
 use futures::Stream;
 use serde::Deserialize;
 use serde_json::json;
+use tokio::time::{self, Duration, MissedTickBehavior};
 
 use crate::{auth, services::ChatEvent, state::AppState};
 
@@ -32,6 +33,8 @@ pub async fn stream_conversation(
         .await
         .ok_or(StatusCode::NOT_FOUND)?;
 
+    let room_service = state.room_service.clone();
+
     let stream = async_stream::stream! {
         for message in history {
             match Event::default().event("message").json_data(json!({
@@ -44,27 +47,54 @@ pub async fn stream_conversation(
                 }
             }
         }
+
+        match Event::default().event("presence").json_data(json!({
+            "type": "presence",
+            "presence": room_service.presence_snapshot().await,
+        })) {
+            Ok(event) => yield Ok(event),
+            Err(error) => tracing::warn!("failed to serialise presence snapshot: {error}"),
+        }
+
+        let mut interval = time::interval(Duration::from_secs(10));
+        interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+        interval.tick().await;
+
         loop {
-            match receiver.recv().await {
-                Ok(ChatEvent::Message(message)) => {
-                    match Event::default().event("message").json_data(json!({
-                        "type": "message",
-                        "message": message,
-                    })) {
-                        Ok(event) => yield Ok(event),
-                        Err(error) => tracing::warn!("failed to serialise message event: {error}"),
+            tokio::select! {
+                biased;
+                result = receiver.recv() => {
+                    match result {
+                        Ok(ChatEvent::Message(message)) => {
+                            match Event::default().event("message").json_data(json!({
+                                "type": "message",
+                                "message": message,
+                            })) {
+                                Ok(event) => yield Ok(event),
+                                Err(error) => tracing::warn!("failed to serialise message event: {error}"),
+                            }
+                        }
+                        Ok(ChatEvent::Presence(presence)) => {
+                            match Event::default().event("presence").json_data(json!({
+                                "type": "presence",
+                                "presence": presence,
+                            })) {
+                                Ok(event) => yield Ok(event),
+                                Err(error) => tracing::warn!("failed to serialise presence event: {error}"),
+                            }
+                        }
+                        Err(_) => break,
                     }
                 }
-                Ok(ChatEvent::Presence(presence)) => {
+                _ = interval.tick() => {
                     match Event::default().event("presence").json_data(json!({
                         "type": "presence",
-                        "presence": presence,
+                        "presence": room_service.presence_snapshot().await,
                     })) {
                         Ok(event) => yield Ok(event),
-                        Err(error) => tracing::warn!("failed to serialise presence event: {error}"),
+                        Err(error) => tracing::warn!("failed to serialise presence snapshot: {error}"),
                     }
                 }
-                Err(_) => break,
             }
         }
     };
