@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::{
     http::{header, Method},
-    routing::{get, post},
+    routing::{get, post, put},
     Extension, Router,
 };
 use tower_http::cors::{Any, CorsLayer};
@@ -92,6 +92,28 @@ pub fn router(state: AppState) -> Router {
             get(get_artifact)
                 .put(update_artifact)
                 .delete(delete_artifact),
+        )
+        .route(
+            "/api/artifacts/:id/variants",
+            get(list_artifact_variants).post(create_artifact_variant),
+        )
+        .route(
+            "/api/artifacts/:id/variants/:variant_id",
+            put(update_artifact_variant).delete(delete_artifact_variant),
+        )
+        .route(
+            "/api/artifacts/:id/variants/:variant_id/options",
+            post(create_variant_option),
+        )
+        .route(
+            "/api/artifacts/:id/variants/:variant_id/options/:option_id",
+            put(update_variant_option).delete(delete_variant_option),
+        )
+        .route("/api/cart", get(get_cart))
+        .route("/api/cart/items", post(add_cart_item))
+        .route(
+            "/api/cart/items/:item_id",
+            put(update_cart_item).delete(delete_cart_item),
         )
         .route("/api/orders", get(list_orders).post(create_order))
         .route(

@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::{
     auth::AuthSession,
-    services::orders::{self, Order, OrderChanges},
+    services::orders::{self, OrderChanges, OrderDetail},
     state::AppState,
 };
 
@@ -19,9 +19,8 @@ type ApiResult<T> = Result<T, (StatusCode, &'static str)>;
 
 #[derive(Debug, Deserialize)]
 pub struct CreateOrderRequest {
+    #[serde(default = "default_order_status")]
     pub status: String,
-    #[serde(default)]
-    pub total_cents: i64,
     #[serde(default = "default_metadata")]
     pub metadata: Value,
 }
@@ -31,15 +30,13 @@ pub struct UpdateOrderRequest {
     #[serde(default)]
     pub status: Option<String>,
     #[serde(default)]
-    pub total_cents: Option<i64>,
-    #[serde(default)]
     pub metadata: Option<Value>,
 }
 
 pub async fn list_orders(
     auth: AuthSession,
     State(state): State<Arc<AppState>>,
-) -> ApiResult<Json<Vec<Order>>> {
+) -> ApiResult<Json<Vec<OrderDetail>>> {
     let user_id = parse_uuid(&auth.user_id)?;
     let orders = orders::list_orders(&state.db, user_id)
         .await
@@ -51,28 +48,30 @@ pub async fn create_order(
     auth: AuthSession,
     State(state): State<Arc<AppState>>,
     Json(body): Json<CreateOrderRequest>,
-) -> ApiResult<(StatusCode, Json<Order>)> {
+) -> ApiResult<(StatusCode, Json<OrderDetail>)> {
     let user_id = parse_uuid(&auth.user_id)?;
-    if body.status.trim().is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "Order status is required"));
+    let status = if body.status.trim().is_empty() {
+        default_order_status()
+    } else {
+        body.status
+    };
+    match orders::checkout_order(&state.db, user_id, status, body.metadata).await {
+        Ok(order) => Ok((StatusCode::CREATED, Json(order))),
+        Err(err) => {
+            if err.to_string().contains("Cart is empty") {
+                Err((StatusCode::BAD_REQUEST, "Cart is empty"))
+            } else {
+                Err((StatusCode::INTERNAL_SERVER_ERROR, "Failed to create order"))
+            }
+        }
     }
-    let order = orders::create_order(
-        &state.db,
-        user_id,
-        body.status,
-        body.total_cents,
-        body.metadata,
-    )
-    .await
-    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create order"))?;
-    Ok((StatusCode::CREATED, Json(order)))
 }
 
 pub async fn get_order(
     auth: AuthSession,
     State(state): State<Arc<AppState>>,
     Path(order_id): Path<String>,
-) -> ApiResult<Json<Order>> {
+) -> ApiResult<Json<OrderDetail>> {
     let user_id = parse_uuid(&auth.user_id)?;
     let order_id = parse_uuid(&order_id)?;
     let order = orders::get_order(&state.db, order_id, user_id)
@@ -89,7 +88,7 @@ pub async fn update_order(
     State(state): State<Arc<AppState>>,
     Path(order_id): Path<String>,
     Json(body): Json<UpdateOrderRequest>,
-) -> ApiResult<Json<Order>> {
+) -> ApiResult<Json<OrderDetail>> {
     let user_id = parse_uuid(&auth.user_id)?;
     let order_id = parse_uuid(&order_id)?;
     if body
@@ -102,7 +101,6 @@ pub async fn update_order(
     }
     let changes = OrderChanges {
         status: body.status,
-        total_cents: body.total_cents,
         metadata: body.metadata,
     };
     let updated = orders::update_order(&state.db, order_id, user_id, changes)
@@ -133,6 +131,10 @@ pub async fn delete_order(
 
 fn parse_uuid(value: &str) -> ApiResult<Uuid> {
     Uuid::parse_str(value).map_err(|_| (StatusCode::BAD_REQUEST, "Invalid identifier"))
+}
+
+fn default_order_status() -> String {
+    "pending".to_string()
 }
 
 fn default_metadata() -> Value {
