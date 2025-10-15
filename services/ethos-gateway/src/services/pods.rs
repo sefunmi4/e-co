@@ -206,7 +206,7 @@ pub async fn publish_pod_snapshot(
         Some(pod) if pod.owner_id == owner_id => pod,
         _ => return Ok(None),
     };
-    let items = pod_items::list_by_pod(pool, pod_id).await?;
+    let items = pod_items::list_by_pod(pool, pod_id, false).await?;
     let metadata = PodSnapshotMetadata {
         pod: pod.clone(),
         items: items.clone(),

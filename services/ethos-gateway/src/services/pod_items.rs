@@ -6,6 +6,12 @@ use serde_json::Value;
 use tokio_postgres::{types::Json as PgJson, Row};
 use uuid::Uuid;
 
+pub const DEFAULT_VISIBILITY: &str = "public";
+
+fn default_visibility() -> String {
+    DEFAULT_VISIBILITY.to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PodItem {
     pub id: Uuid,
@@ -15,6 +21,8 @@ pub struct PodItem {
     pub item_type: String,
     pub item_data: Value,
     pub position: i32,
+    #[serde(default = "default_visibility")]
+    pub visibility: String,
     pub created_at: DateTime<Utc>,
 }
 
@@ -27,6 +35,9 @@ impl PodItem {
             item_type: row.try_get("item_type")?,
             item_data: row.try_get("item_data")?,
             position: row.try_get("position")?,
+            visibility: row
+                .try_get("visibility")
+                .unwrap_or_else(|_| default_visibility()),
             created_at: row.try_get("created_at")?,
         })
     }
@@ -38,18 +49,25 @@ pub struct PodItemChanges {
     pub item_type: Option<String>,
     pub item_data: Option<Value>,
     pub position: Option<i32>,
+    pub visibility: Option<String>,
 }
 
-pub async fn list_by_pod(pool: &Pool, pod_id: Uuid) -> anyhow::Result<Vec<PodItem>> {
+pub async fn list_by_pod(
+    pool: &Pool,
+    pod_id: Uuid,
+    include_hidden: bool,
+) -> anyhow::Result<Vec<PodItem>> {
     let client = pool
         .get()
         .await
         .context("acquire connection for list_by_pod")?;
     let rows = client
         .query(
-            "SELECT id, pod_id, artifact_id, item_type, item_data, position, created_at \
-             FROM pod_items WHERE pod_id = $1 ORDER BY position ASC, created_at ASC",
-            &[&pod_id],
+            "SELECT id, pod_id, artifact_id, item_type, item_data, position, visibility, created_at \
+             FROM pod_items \
+             WHERE pod_id = $1 AND ($2 OR visibility = $3) \
+             ORDER BY position ASC, created_at ASC",
+            &[&pod_id, &include_hidden, &DEFAULT_VISIBILITY],
         )
         .await?;
     rows.into_iter()
@@ -57,16 +75,20 @@ pub async fn list_by_pod(pool: &Pool, pod_id: Uuid) -> anyhow::Result<Vec<PodIte
         .collect()
 }
 
-pub async fn get_pod_item(pool: &Pool, id: Uuid) -> anyhow::Result<Option<PodItem>> {
+pub async fn get_pod_item(
+    pool: &Pool,
+    id: Uuid,
+    include_hidden: bool,
+) -> anyhow::Result<Option<PodItem>> {
     let client = pool
         .get()
         .await
         .context("acquire connection for get_pod_item")?;
     let row = client
         .query_opt(
-            "SELECT id, pod_id, artifact_id, item_type, item_data, position, created_at \
-             FROM pod_items WHERE id = $1",
-            &[&id],
+            "SELECT id, pod_id, artifact_id, item_type, item_data, position, visibility, created_at \
+             FROM pod_items WHERE id = $1 AND ($2 OR visibility = $3)",
+            &[&id, &include_hidden, &DEFAULT_VISIBILITY],
         )
         .await?;
     match row {
@@ -82,6 +104,7 @@ pub async fn create_pod_item(
     item_type: String,
     item_data: Value,
     position: Option<i32>,
+    visibility: String,
 ) -> anyhow::Result<PodItem> {
     let client = pool
         .get()
@@ -89,6 +112,11 @@ pub async fn create_pod_item(
         .context("acquire connection for create_pod_item")?;
     let id = Uuid::new_v4();
     let stored_data = PgJson(item_data);
+    let visibility = if visibility.trim().is_empty() {
+        DEFAULT_VISIBILITY.to_string()
+    } else {
+        visibility
+    };
     let position = match position {
         Some(position) => position,
         None => {
@@ -103,9 +131,9 @@ pub async fn create_pod_item(
     };
     let row = client
         .query_one(
-            "INSERT INTO pod_items (id, pod_id, artifact_id, item_type, item_data, position) \
-             VALUES ($1, $2, $3, $4, $5, $6) \
-             RETURNING id, pod_id, artifact_id, item_type, item_data, position, created_at",
+            "INSERT INTO pod_items (id, pod_id, artifact_id, item_type, item_data, position, visibility) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7) \
+             RETURNING id, pod_id, artifact_id, item_type, item_data, position, visibility, created_at",
             &[
                 &id,
                 &pod_id,
@@ -113,6 +141,7 @@ pub async fn create_pod_item(
                 &item_type,
                 &stored_data,
                 &position,
+                &visibility,
             ],
         )
         .await?;
@@ -134,7 +163,7 @@ pub async fn update_pod_item(
         .context("begin transaction for update_pod_item")?;
     let row = transaction
         .query_opt(
-            "SELECT id, pod_id, artifact_id, item_type, item_data, position, created_at \
+            "SELECT id, pod_id, artifact_id, item_type, item_data, position, visibility, created_at \
              FROM pod_items WHERE id = $1 FOR UPDATE",
             &[&id],
         )
@@ -155,19 +184,27 @@ pub async fn update_pod_item(
     if let Some(position) = changes.position.take() {
         item.position = position;
     }
+    if let Some(visibility) = changes.visibility.take() {
+        if visibility.trim().is_empty() {
+            item.visibility = DEFAULT_VISIBILITY.to_string();
+        } else {
+            item.visibility = visibility;
+        }
+    }
     let stored_data = PgJson(item.item_data.clone());
     let row = transaction
         .query_one(
             "UPDATE pod_items \
-             SET artifact_id = $2, item_type = $3, item_data = $4, position = $5 \
+             SET artifact_id = $2, item_type = $3, item_data = $4, position = $5, visibility = $6 \
              WHERE id = $1 \
-             RETURNING id, pod_id, artifact_id, item_type, item_data, position, created_at",
+             RETURNING id, pod_id, artifact_id, item_type, item_data, position, visibility, created_at",
             &[
                 &item.id,
                 &item.artifact_id,
                 &item.item_type,
                 &stored_data,
                 &item.position,
+                &item.visibility,
             ],
         )
         .await?;

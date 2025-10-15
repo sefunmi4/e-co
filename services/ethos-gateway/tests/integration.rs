@@ -758,6 +758,7 @@ async fn rest_pod_crud_and_publish_endpoints() {
         .unwrap();
     let item: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     let item_id = item["id"].as_str().unwrap();
+    assert_eq!(item["visibility"].as_str().unwrap(), "public");
 
     let response = app
         .clone()
@@ -777,6 +778,7 @@ async fn rest_pod_crud_and_publish_endpoints() {
         .unwrap();
     let items: serde_json::Value = serde_json::from_slice(&items_body).unwrap();
     assert_eq!(items.as_array().unwrap().len(), 1);
+    assert_eq!(items[0]["visibility"].as_str().unwrap(), "public");
 
     let response = app
         .clone()
@@ -786,7 +788,69 @@ async fn rest_pod_crud_and_publish_endpoints() {
                 .uri(format!("/api/pods/{pod_id}/items/{item_id}"))
                 .header("authorization", format!("Bearer {token}"))
                 .header("content-type", "application/json")
-                .body(Body::from(json!({"position": 2}).to_string()))
+                .body(Body::from(
+                    json!({"position": 2, "visibility": "hidden"}).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let updated_item_body = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let updated_item: serde_json::Value = serde_json::from_slice(&updated_item_body).unwrap();
+    assert_eq!(updated_item["visibility"].as_str().unwrap(), "hidden");
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri(format!("/api/pods/{pod_id}/items"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let hidden_items_body = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let hidden_items: serde_json::Value = serde_json::from_slice(&hidden_items_body).unwrap();
+    assert_eq!(hidden_items.as_array().unwrap().len(), 1);
+    assert_eq!(hidden_items[0]["visibility"].as_str().unwrap(), "hidden");
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri(format!("/api/pods/{pod_id}/publish"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let bytes = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let snapshot: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(snapshot["pod"]["id"].as_str().unwrap(), pod_id);
+    assert!(snapshot["items"].as_array().unwrap().is_empty());
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("PUT")
+                .uri(format!("/api/pods/{pod_id}/items/{item_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(json!({"visibility": "public"}).to_string()))
                 .unwrap(),
         )
         .await
@@ -812,6 +876,10 @@ async fn rest_pod_crud_and_publish_endpoints() {
     let snapshot: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(snapshot["pod"]["id"].as_str().unwrap(), pod_id);
     assert_eq!(snapshot["items"][0]["position"].as_i64().unwrap(), 2);
+    assert_eq!(
+        snapshot["items"][0]["visibility"].as_str().unwrap(),
+        "public"
+    );
 
     let response = app
         .clone()

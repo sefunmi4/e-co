@@ -12,7 +12,7 @@ use uuid::Uuid;
 use crate::{
     auth::AuthSession,
     services::{
-        pod_items::{self, PodItem, PodItemChanges},
+        pod_items::{self, PodItem, PodItemChanges, DEFAULT_VISIBILITY},
         pods,
     },
     state::AppState,
@@ -29,6 +29,8 @@ pub struct CreatePodItemRequest {
     pub item_data: Value,
     #[serde(default)]
     pub position: Option<i32>,
+    #[serde(default)]
+    pub visibility: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -41,6 +43,8 @@ pub struct UpdatePodItemRequest {
     pub item_data: Option<Value>,
     #[serde(default)]
     pub position: Option<i32>,
+    #[serde(default)]
+    pub visibility: Option<String>,
 }
 
 pub async fn list_pod_items(
@@ -51,7 +55,7 @@ pub async fn list_pod_items(
     let owner_id = parse_uuid(&auth.user_id)?;
     let pod_id = parse_uuid(&pod_id)?;
     ensure_pod_ownership(&state, pod_id, owner_id).await?;
-    let items = pod_items::list_by_pod(&state.db, pod_id)
+    let items = pod_items::list_by_pod(&state.db, pod_id, true)
         .await
         .map_err(|_| {
             (
@@ -74,6 +78,8 @@ pub async fn create_pod_item(
     if body.item_type.trim().is_empty() {
         return Err((StatusCode::BAD_REQUEST, "Item type is required"));
     }
+    let visibility = normalize_visibility(body.visibility)
+        .map_err(|message| (StatusCode::BAD_REQUEST, message))?;
     let item = pod_items::create_pod_item(
         &state.db,
         pod_id,
@@ -81,6 +87,7 @@ pub async fn create_pod_item(
         body.item_type,
         body.item_data,
         body.position,
+        visibility,
     )
     .await
     .map_err(|_| {
@@ -101,7 +108,7 @@ pub async fn get_pod_item(
     let pod_id = parse_uuid(&pod_id)?;
     let item_id = parse_uuid(&item_id)?;
     ensure_pod_ownership(&state, pod_id, owner_id).await?;
-    let item = pod_items::get_pod_item(&state.db, item_id)
+    let item = pod_items::get_pod_item(&state.db, item_id, true)
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to load pod item"))?;
     match item {
@@ -128,11 +135,14 @@ pub async fn update_pod_item(
     {
         return Err((StatusCode::BAD_REQUEST, "Item type cannot be empty"));
     }
+    let visibility = normalize_visibility_optional(body.visibility)
+        .map_err(|message| (StatusCode::BAD_REQUEST, message))?;
     let changes = PodItemChanges {
         artifact_id: body.artifact_id,
         item_type: body.item_type,
         item_data: body.item_data,
         position: body.position,
+        visibility,
     };
     let updated = pod_items::update_pod_item(&state.db, item_id, changes)
         .await
@@ -157,7 +167,7 @@ pub async fn delete_pod_item(
     let pod_id = parse_uuid(&pod_id)?;
     let item_id = parse_uuid(&item_id)?;
     ensure_pod_ownership(&state, pod_id, owner_id).await?;
-    let item = pod_items::get_pod_item(&state.db, item_id)
+    let item = pod_items::get_pod_item(&state.db, item_id, true)
         .await
         .map_err(|_| {
             (
@@ -206,4 +216,25 @@ fn parse_uuid(value: &str) -> ApiResult<Uuid> {
 
 fn default_json_null() -> Value {
     Value::Null
+}
+
+fn normalize_visibility(value: Option<String>) -> Result<String, &'static str> {
+    match normalize_visibility_optional(value)? {
+        Some(value) => Ok(value),
+        None => Ok(DEFAULT_VISIBILITY.to_string()),
+    }
+}
+
+fn normalize_visibility_optional(value: Option<String>) -> Result<Option<String>, &'static str> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    let normalized = value.trim().to_lowercase();
+    if normalized.is_empty() {
+        return Err("Visibility cannot be empty");
+    }
+    match normalized.as_str() {
+        "public" | "hidden" => Ok(Some(normalized)),
+        _ => Err("Invalid visibility value"),
+    }
 }
