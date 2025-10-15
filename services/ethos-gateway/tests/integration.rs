@@ -5,7 +5,7 @@ use axum::extract::{Path, Query};
 use axum::http::{Request as HttpRequest, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Extension, Router};
-use deadpool_postgres::Config as PgConfig;
+use deadpool_postgres::{Config as PgConfig, Runtime};
 use ethos_gateway::auth;
 use ethos_gateway::config::GatewayConfig;
 use ethos_gateway::grpc::ConversationsGrpc;
@@ -146,6 +146,32 @@ async fn login(app: &Router, email: &str, password: &str) -> serde_json::Value {
     serde_json::from_slice(&bytes).unwrap()
 }
 
+async fn make_stream_test_state() -> (GatewayConfig, Arc<AppState>, Arc<InMemoryRoomService>) {
+    let config = make_config();
+    let mut pg_config = PgConfig::new();
+    pg_config.host = Some("localhost".into());
+    pg_config.user = Some("tester".into());
+    pg_config.dbname = Some("ethos".into());
+    let db = pg_config
+        .create_pool(Some(Runtime::Tokio1), NoTls)
+        .expect("failed to create postgres pool");
+    let room_service = Arc::new(InMemoryRoomService::new());
+    let quest_service = Arc::new(InMemoryQuestService::new());
+    let guild_service = Arc::new(InMemoryGuildService::new());
+    let matrix = Arc::new(NullMatrixBridge);
+    let publisher: Arc<dyn EventPublisher> = Arc::new(TestPublisher::default());
+    let app_state = AppState::new(
+        config.clone(),
+        db,
+        room_service.clone(),
+        publisher,
+        matrix,
+        quest_service,
+        guild_service,
+    );
+    (config, Arc::new(app_state), room_service)
+}
+
 #[tokio::test]
 async fn rest_conversation_flow() {
     let (_config, app_state, room_service, _publisher) = build_state().await;
@@ -266,10 +292,7 @@ async fn rest_conversation_requires_participation() {
         .oneshot(
             HttpRequest::builder()
                 .method("GET")
-                .uri(format!(
-                    "/api/conversations/{}/messages",
-                    conversation_id
-                ))
+                .uri(format!("/api/conversations/{}/messages", conversation_id))
                 .header("authorization", format!("Bearer {stranger_token}"))
                 .body(Body::empty())
                 .unwrap(),
@@ -282,10 +305,7 @@ async fn rest_conversation_requires_participation() {
         .oneshot(
             HttpRequest::builder()
                 .method("GET")
-                .uri(format!(
-                    "/api/conversations/{}/messages",
-                    Uuid::new_v4()
-                ))
+                .uri(format!("/api/conversations/{}/messages", Uuid::new_v4()))
                 .header("authorization", format!("Bearer {owner_token}"))
                 .body(Body::empty())
                 .unwrap(),
@@ -297,30 +317,7 @@ async fn rest_conversation_requires_participation() {
 
 #[tokio::test(start_paused = true)]
 async fn stream_conversation_emits_presence_snapshots() {
-    let config = make_config();
-    let mut pg_config = PgConfig::new();
-    pg_config.host = Some("localhost".into());
-    pg_config.user = Some("tester".into());
-    pg_config.dbname = Some("ethos".into());
-    let db = pg_config
-        .create_pool(Some(deadpool_postgres::Runtime::Tokio1), NoTls)
-        .expect("failed to create postgres pool");
-    let room_service = Arc::new(InMemoryRoomService::new());
-    let quest_service = Arc::new(InMemoryQuestService::new());
-    let guild_service = Arc::new(InMemoryGuildService::new());
-    let test_publisher = Arc::new(TestPublisher::default());
-    let matrix = Arc::new(NullMatrixBridge);
-    let publisher: Arc<dyn EventPublisher> = test_publisher.clone();
-    let app_state = AppState::new(
-        config.clone(),
-        db,
-        room_service.clone(),
-        publisher,
-        matrix,
-        quest_service,
-        guild_service,
-    );
-    let state = Arc::new(app_state);
+    let (config, state, room_service) = make_stream_test_state().await;
 
     let user_id = "user-1".to_string();
     let conversation = room_service
@@ -378,6 +375,46 @@ async fn stream_conversation_emits_presence_snapshots() {
     assert_eq!(periodic_payload["type"], "presence");
     let refreshed_snapshot = serde_json::to_value(room_service.presence_snapshot().await).unwrap();
     assert_eq!(periodic_payload["presence"], refreshed_snapshot);
+}
+
+#[tokio::test]
+async fn stream_conversation_rejects_non_participant() {
+    let (config, state, room_service) = make_stream_test_state().await;
+
+    let owner_id = "owner".to_string();
+    let conversation = room_service
+        .create_conversation(vec![owner_id], Some("Unauthorized".into()))
+        .await
+        .unwrap();
+
+    let stranger_token = sign_token(&config, "stranger", "stranger@example.com");
+
+    let result = stream_conversation(
+        Query(StreamQuery {
+            token: stranger_token,
+        }),
+        Path(conversation.id.clone()),
+        Extension(state),
+    )
+    .await;
+
+    assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn stream_conversation_returns_not_found_for_missing_conversation() {
+    let (config, state, _room_service) = make_stream_test_state().await;
+
+    let token = sign_token(&config, "user-1", "user@example.com");
+
+    let result = stream_conversation(
+        Query(StreamQuery { token }),
+        Path(Uuid::new_v4().to_string()),
+        Extension(state),
+    )
+    .await;
+
+    assert_eq!(result.unwrap_err(), StatusCode::NOT_FOUND);
 }
 
 async fn next_presence_payload(body: &mut Body) -> serde_json::Value {

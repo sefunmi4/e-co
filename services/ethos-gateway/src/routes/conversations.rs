@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use axum::{extract::Path, Extension, Json};
+use axum::{extract::Path, http::StatusCode, Extension, Json};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -49,12 +49,12 @@ fn map_conversation(conversation: Conversation, messages: Vec<Message>) -> Conve
 pub async fn list_conversations(
     auth: AuthSession,
     Extension(state): Extension<Arc<AppState>>,
-) -> Result<Json<ConversationsEnvelope>, axum::http::StatusCode> {
+) -> Result<Json<ConversationsEnvelope>, StatusCode> {
     let conversations = state
         .room_service
         .list_conversations(&auth.user_id)
         .await
-        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let mut payloads = Vec::new();
     for conversation in conversations {
         let _ = state.matrix.ensure_room(&conversation).await;
@@ -76,7 +76,7 @@ pub async fn create_conversation(
     auth: AuthSession,
     Extension(state): Extension<Arc<AppState>>,
     Json(body): Json<CreateConversationBody>,
-) -> Result<Json<ConversationPayload>, axum::http::StatusCode> {
+) -> Result<Json<ConversationPayload>, StatusCode> {
     let mut participants = body.participant_user_ids.clone();
     if !participants.contains(&auth.user_id) {
         participants.push(auth.user_id.clone());
@@ -85,7 +85,7 @@ pub async fn create_conversation(
         .room_service
         .create_conversation(participants, body.topic)
         .await
-        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let _ = state.matrix.ensure_room(&conversation).await;
     Ok(Json(map_conversation(conversation, Vec::new())))
 }
@@ -94,32 +94,14 @@ pub async fn list_messages(
     auth: AuthSession,
     Extension(state): Extension<Arc<AppState>>,
     Path(id): Path<String>,
-) -> Result<Json<Vec<Message>>, axum::http::StatusCode> {
-    let conversation = state
-        .room_service
-        .get_conversation(&id)
-        .await
-        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let conversation = match conversation {
-        Some(conversation) => conversation,
-        None => return Err(axum::http::StatusCode::NOT_FOUND),
-    };
-
-    let is_participant = conversation
-        .participants
-        .iter()
-        .any(|participant| participant.user_id == auth.user_id);
-
-    if !is_participant {
-        return Err(axum::http::StatusCode::FORBIDDEN);
-    }
+) -> Result<Json<Vec<Message>>, StatusCode> {
+    let _conversation = ensure_conversation_participant(&state, &id, &auth.user_id).await?;
 
     let history = state
         .room_service
         .history(&id)
         .await
-        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(history))
 }
 
@@ -128,12 +110,12 @@ pub async fn post_message(
     Extension(state): Extension<Arc<AppState>>,
     Path(id): Path<String>,
     Json(body): Json<PostMessageBody>,
-) -> Result<Json<Message>, axum::http::StatusCode> {
+) -> Result<Json<Message>, StatusCode> {
     let message = state
         .room_service
         .append_message(&id, &auth.user_id, &body.body)
         .await
-        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     if let Ok(Some(conversation)) = state.room_service.get_conversation(&id).await {
         let _ = state.matrix.send_message(&conversation, &message).await;
     }
@@ -144,4 +126,32 @@ pub async fn post_message(
             .await;
     }
     Ok(Json(message))
+}
+
+pub async fn ensure_conversation_participant(
+    state: &AppState,
+    conversation_id: &str,
+    user_id: &str,
+) -> Result<Conversation, StatusCode> {
+    let conversation = state
+        .room_service
+        .get_conversation(conversation_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let conversation = match conversation {
+        Some(conversation) => conversation,
+        None => return Err(StatusCode::NOT_FOUND),
+    };
+
+    let is_participant = conversation
+        .participants
+        .iter()
+        .any(|participant| participant.user_id == user_id);
+
+    if !is_participant {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    Ok(conversation)
 }
