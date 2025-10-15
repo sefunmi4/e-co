@@ -16,6 +16,10 @@ eco-core = { path = "../../engines/eco-core" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 thiserror = "1.0"
+tantivy = { version = "0.20", default-features = false, features = ["mmap"] }
+
+[patch.crates-io]
+zstd-safe = { path = "../../vendor/zstd-safe" }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
