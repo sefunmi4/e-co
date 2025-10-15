@@ -91,14 +91,35 @@ pub async fn create_conversation(
 }
 
 pub async fn list_messages(
+    auth: AuthSession,
     Extension(state): Extension<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<Json<Vec<Message>>, axum::http::StatusCode> {
+    let conversation = state
+        .room_service
+        .get_conversation(&id)
+        .await
+        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let conversation = match conversation {
+        Some(conversation) => conversation,
+        None => return Err(axum::http::StatusCode::NOT_FOUND),
+    };
+
+    let is_participant = conversation
+        .participants
+        .iter()
+        .any(|participant| participant.user_id == auth.user_id);
+
+    if !is_participant {
+        return Err(axum::http::StatusCode::FORBIDDEN);
+    }
+
     let history = state
         .room_service
         .history(&id)
         .await
-        .map_err(|_| axum::http::StatusCode::NOT_FOUND)?;
+        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(history))
 }
 

@@ -120,13 +120,7 @@ async fn register_user(app: &Router, email: &str, password: &str) -> serde_json:
     serde_json::from_slice(&bytes).unwrap()
 }
 
-#[tokio::test]
-async fn rest_conversation_flow() {
-    let (_config, app_state, room_service, _publisher) = build_state().await;
-    let app = router(app_state.clone());
-
-    let email = format!("user+{}@example.com", Uuid::new_v4());
-    let register_session = register_user(&app, &email, "password").await;
+async fn login(app: &Router, email: &str, password: &str) -> serde_json::Value {
     let response = app
         .clone()
         .oneshot(
@@ -137,7 +131,7 @@ async fn rest_conversation_flow() {
                 .body(Body::from(
                     json!({
                         "email": email,
-                        "password": "password",
+                        "password": password,
                     })
                     .to_string(),
                 ))
@@ -149,7 +143,17 @@ async fn rest_conversation_flow() {
     let bytes = body::to_bytes(response.into_body(), usize::MAX)
         .await
         .unwrap();
-    let session: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    serde_json::from_slice(&bytes).unwrap()
+}
+
+#[tokio::test]
+async fn rest_conversation_flow() {
+    let (_config, app_state, room_service, _publisher) = build_state().await;
+    let app = router(app_state.clone());
+
+    let email = format!("user+{}@example.com", Uuid::new_v4());
+    let register_session = register_user(&app, &email, "password").await;
+    let session = login(&app, &email, "password").await;
     let token = session["token"].as_str().unwrap();
     let user_id = register_session["user"]["id"].as_str().unwrap();
     assert!(!register_session["user"]["is_guest"].as_bool().unwrap());
@@ -216,6 +220,79 @@ async fn rest_conversation_flow() {
             .len(),
         1
     );
+}
+
+#[tokio::test]
+async fn rest_conversation_requires_participation() {
+    let (_config, app_state, room_service, _publisher) = build_state().await;
+    let app = router(app_state.clone());
+
+    let email_owner = format!("user+{}@example.com", Uuid::new_v4());
+    let register_owner = register_user(&app, &email_owner, "password").await;
+    let owner_session = login(&app, &email_owner, "password").await;
+    let owner_token = owner_session["token"].as_str().unwrap();
+    let owner_id = register_owner["user"]["id"].as_str().unwrap();
+
+    let create_body = json!({
+        "participant_user_ids": [owner_id],
+        "topic": "Restricted Room"
+    });
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri("/api/conversations")
+                .header("authorization", format!("Bearer {owner_token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(create_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let conversations = room_service.list_conversations(owner_id).await.unwrap();
+    assert_eq!(conversations.len(), 1);
+    let conversation_id = conversations[0].id.clone();
+
+    let email_stranger = format!("stranger+{}@example.com", Uuid::new_v4());
+    register_user(&app, &email_stranger, "password").await;
+    let stranger_session = login(&app, &email_stranger, "password").await;
+    let stranger_token = stranger_session["token"].as_str().unwrap();
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri(format!(
+                    "/api/conversations/{}/messages",
+                    conversation_id
+                ))
+                .header("authorization", format!("Bearer {stranger_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+
+    let response = app
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri(format!(
+                    "/api/conversations/{}/messages",
+                    Uuid::new_v4()
+                ))
+                .header("authorization", format!("Bearer {owner_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
 
 #[tokio::test(start_paused = true)]
