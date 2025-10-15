@@ -9,14 +9,24 @@ jobs:
     strategy:
       matrix:
         include:
+          - name: Config
+            workspace: packages/config
+            vitest_config: ''
+            playwright_config: ''
+            build_command: npm run build -w packages/config
+            lint_command: npm run lint -w packages/config
           - name: Ethos Frontend
             workspace: apps/web/ethos/frontend
             vitest_config: apps/web/ethos/frontend/vitest.config.ts
             playwright_config: ''
+            build_command: ''
+            lint_command: ''
           - name: Ether Pod
             workspace: apps/web/ether-pod
             vitest_config: apps/web/ether-pod/vitest.config.ts
             playwright_config: apps/web/ether-pod/playwright.config.ts
+            build_command: ''
+            lint_command: ''
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
@@ -24,7 +34,14 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm ci --workspace ${{ matrix.workspace }}
+      - name: Lint workspace
+        if: ${{ matrix.lint_command != '' }}
+        run: ${{ matrix.lint_command }}
+      - name: Build workspace
+        if: ${{ matrix.build_command != '' }}
+        run: ${{ matrix.build_command }}
       - name: Run Vitest
+        if: ${{ matrix.vitest_config != '' }}
         run: npx vitest run --config ${{ matrix.vitest_config }}
       - name: Install Playwright Browsers
         if: ${{ matrix.playwright_config != '' }}

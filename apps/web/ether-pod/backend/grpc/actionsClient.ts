@@ -1,3 +1,4 @@
+import { env } from "@e-co/config";
 import {
   createPromiseClient,
   type PromiseClient,
@@ -9,8 +10,7 @@ export type ActionsClient = PromiseClient<typeof ActionsService>;
 
 type ClientFactory = () => ActionsClient;
 
-const resolveAgentUrl = () =>
-  process.env.NEXT_PUBLIC_AGENT_GRPC_URL ?? "http://127.0.0.1:50051";
+const resolveAgentUrl = () => env.agent.grpcUrl;
 
 let factory: ClientFactory = () => {
   const baseUrl = resolveAgentUrl();

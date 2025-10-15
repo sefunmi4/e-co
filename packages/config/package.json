@@ -1,0 +1,27 @@
+{
+  "name": "@e-co/config",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./env.json": "./dist/env.json"
+  },
+  "scripts": {
+    "build": "npm run clean && tsc -p tsconfig.json && node ./scripts/write-json.cjs",
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "typescript": "^5.4.5"
+  }
+}

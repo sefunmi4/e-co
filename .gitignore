@@ -2,6 +2,7 @@
 node_modules/
 # Build outputs
 **/dist/
+**/public/runtime-config.json
 # Rust build artifacts
 **/target/
 # Logs

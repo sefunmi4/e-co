@@ -1,4 +1,35 @@
-use std::{env, net::SocketAddr};
+use std::{env, fs, io, net::SocketAddr};
+
+use anyhow::Context;
+use serde::Deserialize;
+
+const DEFAULT_CONFIG_PATH: &str = "packages/config/dist/env.json";
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MatrixFileConfig {
+    homeserver: String,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    user_id: Option<String>,
+    device_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GatewayFileConfig {
+    jwt_secret: String,
+    http_addr: String,
+    grpc_addr: String,
+    nats_url: Option<String>,
+    database_url: String,
+    matrix: Option<MatrixFileConfig>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct ConfigFile {
+    gateway: GatewayFileConfig,
+}
 
 #[derive(Clone, Debug)]
 pub struct MatrixConfig {
@@ -20,7 +51,61 @@ pub struct GatewayConfig {
 }
 
 impl GatewayConfig {
+    fn from_config_file() -> anyhow::Result<Option<Self>> {
+        let explicit_path = env::var("ECO_CONFIG_PATH").ok();
+        let candidate_path = explicit_path
+            .as_deref()
+            .unwrap_or(DEFAULT_CONFIG_PATH);
+
+        let contents = match fs::read_to_string(candidate_path) {
+            Ok(contents) => contents,
+            Err(error) => {
+                if explicit_path.is_some() || error.kind() != io::ErrorKind::NotFound {
+                    return Err(error)
+                        .with_context(|| format!("failed to read config file at {}", candidate_path));
+                }
+
+                return Ok(None);
+            }
+        };
+
+        let file: ConfigFile = serde_json::from_str(&contents)
+            .with_context(|| format!("invalid config JSON in {}", candidate_path))?;
+
+        let http_addr: SocketAddr = file
+            .gateway
+            .http_addr
+            .parse()
+            .with_context(|| format!("invalid http_addr in {}", candidate_path))?;
+        let grpc_addr: SocketAddr = file
+            .gateway
+            .grpc_addr
+            .parse()
+            .with_context(|| format!("invalid grpc_addr in {}", candidate_path))?;
+
+        let matrix = file.gateway.matrix.map(|matrix| MatrixConfig {
+            homeserver: matrix.homeserver,
+            access_token: matrix.access_token,
+            refresh_token: matrix.refresh_token,
+            user_id: matrix.user_id,
+            device_id: matrix.device_id,
+        });
+
+        Ok(Some(Self {
+            jwt_secret: file.gateway.jwt_secret,
+            http_addr,
+            grpc_addr,
+            nats_url: file.gateway.nats_url,
+            database_url: file.gateway.database_url,
+            matrix,
+        }))
+    }
+
     pub fn from_env() -> anyhow::Result<Self> {
+        if let Some(config) = Self::from_config_file()? {
+            return Ok(config);
+        }
+
         let jwt_secret =
             env::var("ETHOS_JWT_SECRET").unwrap_or_else(|_| "insecure-dev-secret".to_string());
         let http_addr: SocketAddr = env::var("ETHOS_HTTP_ADDR")

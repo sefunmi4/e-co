@@ -1,7 +1,6 @@
-export const GATEWAY_URL =
-  process.env.NEXT_PUBLIC_GATEWAY_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  'http://localhost:8080';
+import { env } from '@e-co/config';
+
+export const GATEWAY_URL = env.web.apiUrl;
 
 export class GatewayRequestError extends Error {
   constructor(message, { status, cause, hint } = {}) {
