@@ -2,6 +2,7 @@ use std::{env, sync::Arc};
 
 use axum::body::{self, Body};
 use axum::http::{Request as HttpRequest, StatusCode};
+use axum::Router;
 use deadpool_postgres::Config as PgConfig;
 use ethos_gateway::auth;
 use ethos_gateway::config::GatewayConfig;
@@ -22,6 +23,7 @@ use serde_json::json;
 use tokio_postgres::NoTls;
 use tonic::Request as GrpcRequest;
 use tower::ServiceExt;
+use uuid::Uuid;
 
 fn make_config() -> GatewayConfig {
     GatewayConfig {
@@ -85,15 +87,7 @@ async fn build_state() -> (
     (config, app_state, room_service, test_publisher)
 }
 
-#[tokio::test]
-async fn rest_conversation_flow() {
-    let (_config, app_state, room_service, _publisher) = build_state().await;
-    let app = router(app_state.clone());
-
-    let register_body = json!({
-        "email": "user@example.com",
-        "password": "password"
-    });
+async fn register_user(app: &Router, email: &str, password: &str) -> serde_json::Value {
     let response = app
         .clone()
         .oneshot(
@@ -101,17 +95,31 @@ async fn rest_conversation_flow() {
                 .method("POST")
                 .uri("/auth/register")
                 .header("content-type", "application/json")
-                .body(Body::from(register_body.to_string()))
+                .body(Body::from(
+                    json!({
+                        "email": email,
+                        "password": password,
+                    })
+                    .to_string(),
+                ))
                 .unwrap(),
         )
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+    let bytes = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    serde_json::from_slice(&bytes).unwrap()
+}
 
-    let body = json!({
-        "email": "user@example.com",
-        "password": "password"
-    });
+#[tokio::test]
+async fn rest_conversation_flow() {
+    let (_config, app_state, room_service, _publisher) = build_state().await;
+    let app = router(app_state.clone());
+
+    let email = format!("user+{}@example.com", Uuid::new_v4());
+    let register_session = register_user(&app, &email, "password").await;
     let response = app
         .clone()
         .oneshot(
@@ -119,7 +127,13 @@ async fn rest_conversation_flow() {
                 .method("POST")
                 .uri("/auth/login")
                 .header("content-type", "application/json")
-                .body(Body::from(body.to_string()))
+                .body(Body::from(
+                    json!({
+                        "email": email,
+                        "password": "password",
+                    })
+                    .to_string(),
+                ))
                 .unwrap(),
         )
         .await
@@ -130,8 +144,8 @@ async fn rest_conversation_flow() {
         .unwrap();
     let session: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     let token = session["token"].as_str().unwrap();
-    let user_id = session["user"]["id"].as_str().unwrap();
-    assert!(!session["user"]["is_guest"].as_bool().unwrap());
+    let user_id = register_session["user"]["id"].as_str().unwrap();
+    assert!(!register_session["user"]["is_guest"].as_bool().unwrap());
 
     let create_body = json!({
         "participant_user_ids": [user_id],
@@ -246,6 +260,479 @@ async fn rest_guilds_and_quests_endpoints() {
     assert!(!guilds_array.is_empty());
     assert!(guilds_array[0].get("id").is_some());
     assert!(guilds_array[0].get("name").is_some());
+}
+
+#[tokio::test]
+async fn rest_pod_crud_and_publish_endpoints() {
+    let (_config, app_state, _room_service, _publisher) = build_state().await;
+    let app = router(app_state.clone());
+
+    let email = format!("pod-user+{}@example.com", Uuid::new_v4());
+    let session = register_user(&app, &email, "password").await;
+    let token = session["token"].as_str().unwrap();
+
+    let create_pod = json!({
+        "title": "Launch Pod",
+        "description": "Alpha iteration",
+    });
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri("/api/pods")
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(create_pod.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let bytes = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let pod: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let pod_id = pod["id"].as_str().unwrap();
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri("/api/pods")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let pods_body = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let pods: serde_json::Value = serde_json::from_slice(&pods_body).unwrap();
+    assert!(!pods.as_array().unwrap().is_empty());
+
+    let update_pod = json!({ "title": "Launch Pod v2" });
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("PUT")
+                .uri(format!("/api/pods/{pod_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(update_pod.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let create_item = json!({
+        "item_type": "note",
+        "item_data": { "text": "First entry" },
+        "position": 1,
+    });
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri(format!("/api/pods/{pod_id}/items"))
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(create_item.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let bytes = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let item: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let item_id = item["id"].as_str().unwrap();
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri(format!("/api/pods/{pod_id}/items"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let items_body = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let items: serde_json::Value = serde_json::from_slice(&items_body).unwrap();
+    assert_eq!(items.as_array().unwrap().len(), 1);
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("PUT")
+                .uri(format!("/api/pods/{pod_id}/items/{item_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(json!({"position": 2}).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri(format!("/api/pods/{pod_id}/publish"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let bytes = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let snapshot: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(snapshot["pod"]["id"].as_str().unwrap(), pod_id);
+    assert_eq!(snapshot["items"][0]["position"].as_i64().unwrap(), 2);
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri("/api/public/pods")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let public_body = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let public: serde_json::Value = serde_json::from_slice(&public_body).unwrap();
+    assert!(!public.as_array().unwrap().is_empty());
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("DELETE")
+                .uri(format!("/api/pods/{pod_id}/items/{item_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("DELETE")
+                .uri(format!("/api/pods/{pod_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri(format!("/api/pods/{pod_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let response = app
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri(format!("/api/pods/{pod_id}/items/{item_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn rest_artifacts_and_orders_endpoints() {
+    let (_config, app_state, _room_service, _publisher) = build_state().await;
+    let app = router(app_state.clone());
+
+    let email = format!("commerce-user+{}@example.com", Uuid::new_v4());
+    let session = register_user(&app, &email, "password").await;
+    let token = session["token"].as_str().unwrap();
+
+    let create_artifact = json!({
+        "artifact_type": "document",
+        "metadata": { "title": "Spec" },
+    });
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri("/api/artifacts")
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(create_artifact.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let bytes = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let artifact: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let artifact_id = artifact["id"].as_str().unwrap();
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri("/api/artifacts")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri(format!("/api/artifacts/{artifact_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let bad_update = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("PUT")
+                .uri(format!("/api/artifacts/{artifact_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(json!({"artifact_type": ""}).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(bad_update.status(), StatusCode::BAD_REQUEST);
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("PUT")
+                .uri(format!("/api/artifacts/{artifact_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({"metadata": {"title": "Updated"}}).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri("/api/artifacts?artifact_type=document")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("DELETE")
+                .uri(format!("/api/artifacts/{artifact_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri(format!("/api/artifacts/{artifact_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let order_body = json!({
+        "status": "pending",
+        "total_cents": 1500,
+        "metadata": { "sku": "sku-1" },
+    });
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri("/api/orders")
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(order_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let bytes = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let order: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let order_id = order["id"].as_str().unwrap();
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri("/api/orders")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri(format!("/api/orders/{order_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let bad_update = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("PUT")
+                .uri(format!("/api/orders/{order_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(json!({"status": ""}).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(bad_update.status(), StatusCode::BAD_REQUEST);
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("PUT")
+                .uri(format!("/api/orders/{order_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "status": "fulfilled",
+                        "total_cents": 1800,
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("DELETE")
+                .uri(format!("/api/orders/{order_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+    let response = app
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri(format!("/api/orders/{order_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
