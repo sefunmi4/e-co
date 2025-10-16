@@ -91,6 +91,11 @@ const MIGRATIONS: &[Migration] = &[
     ),
 ];
 
+const DEMO_SEED: Migration = Migration::new(
+    "0016_seed_demo_data.sql",
+    include_str!("../migrations/0016_seed_demo_data.sql"),
+);
+
 fn migration_sections(sql: &'static str) -> (&'static str, Option<&'static str>) {
     let (up_section, down_section) = if let Some((up, down)) = sql.split_once("-- migrate:down") {
         (up, Some(down))
@@ -209,4 +214,24 @@ pub fn down_migrations() -> impl Iterator<Item = (&'static str, &'static str)> {
         .iter()
         .rev()
         .filter_map(|migration| migration.down_sql().map(|sql| (migration.name, sql)))
+}
+
+pub async fn run_demo_seed(pool: &Pool) -> anyhow::Result<()> {
+    let client = pool
+        .get()
+        .await
+        .context("failed to acquire postgres client for demo seed")?;
+
+    let up_sql = DEMO_SEED.up_sql();
+
+    if up_sql.is_empty() {
+        return Ok(());
+    }
+
+    client
+        .batch_execute(up_sql)
+        .await
+        .with_context(|| format!("failed to execute database seed {}", DEMO_SEED.name))?;
+
+    Ok(())
 }
