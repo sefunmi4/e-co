@@ -5,6 +5,7 @@ use axum::extract::{Path, Query};
 use axum::http::{Request as HttpRequest, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Extension, Router};
+use chrono::{TimeZone, Utc};
 use deadpool_postgres::{Config as PgConfig, Pool};
 use ethos_gateway::auth;
 use ethos_gateway::config::GatewayConfig;
@@ -68,7 +69,7 @@ async fn reset_database(db: &Pool) {
         .expect("failed to acquire connection for test reset");
     client
         .batch_execute(
-            "TRUNCATE TABLE order_item_options, order_items, cart_item_options, cart_items, carts, artifact_variant_options, artifact_variants, memberships, quest_applications, quests, guilds, messages, conversations, pod_items, pods, artifacts, orders, refresh_sessions, users RESTART IDENTITY CASCADE;",
+            "TRUNCATE TABLE analytics_events, order_item_options, order_items, cart_item_options, cart_items, carts, artifact_variant_options, artifact_variants, memberships, quest_applications, quests, guilds, messages, conversations, pod_items, pods, artifacts, orders, refresh_sessions, users RESTART IDENTITY CASCADE;",
         )
         .await
         .expect("failed to reset database for tests");
@@ -2010,5 +2011,180 @@ async fn artifact_variant_cart_checkout_flow() {
     assert_eq!(
         orders_list[0]["order"]["total_cents"].as_i64().unwrap(),
         1200
+    );
+}
+
+#[tokio::test]
+async fn analytics_endpoints_return_paginated_buckets() {
+    let (_config, app_state, _room_service, _publisher) = build_state().await;
+    let app = router(app_state.clone());
+
+    let mut client = app_state
+        .db
+        .get()
+        .await
+        .expect("acquire connection for analytics test");
+
+    let user_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
+    let display_name: Option<String> = Some("Analyst".to_string());
+    client
+        .execute(
+            "INSERT INTO users (id, email, password_hash, display_name, is_guest) VALUES ($1, $2, $3, $4, $5)",
+            &[&user_id, &"analytics@example.com", &"hash", &display_name, &false],
+        )
+        .await
+        .unwrap();
+
+    let pod_a = Uuid::parse_str("00000000-0000-0000-0000-0000000000aa").unwrap();
+    let pod_b = Uuid::parse_str("00000000-0000-0000-0000-0000000000bb").unwrap();
+    let pod_a_str = pod_a.to_string();
+    let no_description: Option<String> = None;
+    client
+        .execute(
+            "INSERT INTO pods (id, owner_id, title, description) VALUES ($1, $2, $3, $4)",
+            &[&pod_a, &user_id, &"Pod Alpha", &no_description],
+        )
+        .await
+        .unwrap();
+    client
+        .execute(
+            "INSERT INTO pods (id, owner_id, title, description) VALUES ($1, $2, $3, $4)",
+            &[&pod_b, &user_id, &"Pod Beta", &no_description],
+        )
+        .await
+        .unwrap();
+
+    let artifact_id = Uuid::parse_str("00000000-0000-0000-0000-0000000000cc").unwrap();
+    let artifact_str = artifact_id.to_string();
+    client
+        .execute(
+            "INSERT INTO artifacts (id, owner_id, artifact_type) VALUES ($1, $2, $3)",
+            &[&artifact_id, &user_id, &"collectible"],
+        )
+        .await
+        .unwrap();
+
+    let base = Utc.with_ymd_and_hms(2024, 5, 20, 12, 0, 0).unwrap();
+    let events = [
+        ("00000000-0000-0000-0000-000000000101", pod_a, base),
+        (
+            "00000000-0000-0000-0000-000000000102",
+            pod_a,
+            base + chrono::Duration::hours(1),
+        ),
+        (
+            "00000000-0000-0000-0000-000000000103",
+            pod_a,
+            base + chrono::Duration::days(1),
+        ),
+        (
+            "00000000-0000-0000-0000-000000000104",
+            pod_b,
+            base + chrono::Duration::hours(3),
+        ),
+    ];
+
+    for (id, pod_id, occurred_at) in events {
+        client
+            .execute(
+                "INSERT INTO analytics_events (id, event_type, pod_id, artifact_id, occurred_at) VALUES ($1, $2, $3, $4, $5)",
+                &[&Uuid::parse_str(id).unwrap(), &"pod.view", &pod_id, &artifact_id, &occurred_at],
+            )
+            .await
+            .unwrap();
+    }
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri("/api/analytics/pods?window=day&page_size=2")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body_bytes = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let payload: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(payload["window"].as_str(), Some("day"));
+    assert_eq!(payload["page"].as_i64(), Some(1));
+    assert_eq!(payload["page_size"].as_i64(), Some(2));
+    assert_eq!(payload["has_more"].as_bool(), Some(true));
+    let rows = payload["data"].as_array().unwrap();
+    assert_eq!(rows.len(), 2);
+
+    let first_bucket_start =
+        chrono::DateTime::parse_from_rfc3339(rows[0]["bucket_start"].as_str().unwrap())
+            .unwrap()
+            .with_timezone(&Utc);
+    assert_eq!(
+        first_bucket_start,
+        Utc.with_ymd_and_hms(2024, 5, 21, 0, 0, 0).unwrap()
+    );
+    let first_bucket_end =
+        chrono::DateTime::parse_from_rfc3339(rows[0]["bucket_end"].as_str().unwrap())
+            .unwrap()
+            .with_timezone(&Utc);
+    assert_eq!(
+        first_bucket_end,
+        Utc.with_ymd_and_hms(2024, 5, 22, 0, 0, 0).unwrap()
+    );
+    assert_eq!(rows[0]["pod_id"].as_str(), Some(pod_a_str.as_str()));
+    assert_eq!(rows[0]["total"].as_i64(), Some(1));
+
+    let second_bucket_start =
+        chrono::DateTime::parse_from_rfc3339(rows[1]["bucket_start"].as_str().unwrap())
+            .unwrap()
+            .with_timezone(&Utc);
+    assert_eq!(
+        second_bucket_start,
+        Utc.with_ymd_and_hms(2024, 5, 20, 0, 0, 0).unwrap()
+    );
+    assert_eq!(rows[1]["pod_id"].as_str(), Some(pod_a_str.as_str()));
+    assert_eq!(rows[1]["total"].as_i64(), Some(2));
+
+    let response = app
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri("/api/analytics/artifacts?window=week")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let artifact_body = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let artifact_payload: serde_json::Value = serde_json::from_slice(&artifact_body).unwrap();
+    assert_eq!(artifact_payload["window"].as_str(), Some("week"));
+    assert_eq!(artifact_payload["has_more"].as_bool(), Some(false));
+    let artifact_rows = artifact_payload["data"].as_array().unwrap();
+    assert_eq!(artifact_rows.len(), 1);
+    assert_eq!(
+        artifact_rows[0]["artifact_id"].as_str(),
+        Some(artifact_str.as_str())
+    );
+    assert_eq!(artifact_rows[0]["total"].as_i64(), Some(4));
+    let week_start =
+        chrono::DateTime::parse_from_rfc3339(artifact_rows[0]["bucket_start"].as_str().unwrap())
+            .unwrap()
+            .with_timezone(&Utc);
+    assert_eq!(
+        week_start,
+        Utc.with_ymd_and_hms(2024, 5, 20, 0, 0, 0).unwrap()
+    );
+    let week_end =
+        chrono::DateTime::parse_from_rfc3339(artifact_rows[0]["bucket_end"].as_str().unwrap())
+            .unwrap()
+            .with_timezone(&Utc);
+    assert_eq!(
+        week_end,
+        Utc.with_ymd_and_hms(2024, 5, 27, 0, 0, 0).unwrap()
     );
 }
