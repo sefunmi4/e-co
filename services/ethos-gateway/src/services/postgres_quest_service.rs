@@ -27,6 +27,10 @@ impl PostgresQuestService {
         }
     }
 
+    fn public_statuses() -> Vec<String> {
+        vec!["published".to_string(), "approved".to_string()]
+    }
+
     fn row_to_value(row: &Row) -> anyhow::Result<Value> {
         let id: Uuid = row.try_get("id")?;
         let creator_id: Uuid = row.try_get("creator_id")?;
@@ -169,7 +173,7 @@ impl PostgresQuestService {
 impl QuestService for PostgresQuestService {
     async fn list(
         &self,
-        _actor_id: Option<&str>,
+        actor_id: Option<&str>,
         filters: &HashMap<String, Value>,
     ) -> anyhow::Result<Vec<Value>> {
         let client = self
@@ -182,6 +186,11 @@ impl QuestService for PostgresQuestService {
         );
         let mut conditions = Vec::new();
         let mut params: Vec<Box<dyn ToSql + Sync + Send>> = Vec::new();
+
+        let actor_uuid = match actor_id {
+            Some(actor) => Some(Self::parse_actor(actor)?),
+            None => None,
+        };
 
         if let Some(value) = filters.get("id") {
             match value {
@@ -246,6 +255,21 @@ impl QuestService for PostgresQuestService {
             }
         }
 
+        let public_statuses = Self::public_statuses();
+        if let Some(actor_uuid) = actor_uuid {
+            params.push(Box::new(actor_uuid));
+            let actor_param = params.len();
+            params.push(Box::new(public_statuses));
+            let statuses_param = params.len();
+            conditions.push(format!(
+                "(creator_id = ${actor_param} OR LOWER(status) = ANY(${statuses_param}))"
+            ));
+        } else {
+            params.push(Box::new(public_statuses));
+            let statuses_param = params.len();
+            conditions.push(format!("LOWER(status) = ANY(${statuses_param})"));
+        }
+
         if !conditions.is_empty() {
             query.push_str(" WHERE ");
             query.push_str(&conditions.join(" AND "));
@@ -262,19 +286,36 @@ impl QuestService for PostgresQuestService {
             .collect()
     }
 
-    async fn get(&self, _actor_id: Option<&str>, id: &str) -> anyhow::Result<Option<Value>> {
+    async fn get(&self, actor_id: Option<&str>, id: &str) -> anyhow::Result<Option<Value>> {
         let client = self
             .pool
             .get()
             .await
             .context("acquire connection for get quest")?;
         let quest_id = Uuid::parse_str(id).context("invalid quest id")?;
-        let row = client
-            .query_opt(
-                "SELECT id, creator_id, title, description, status, created_at, updated_at FROM quests WHERE id = $1",
-                &[&quest_id],
-            )
-            .await?;
+        let actor_uuid = match actor_id {
+            Some(actor) => Some(Self::parse_actor(actor)?),
+            None => None,
+        };
+        let row = if let Some(actor_uuid) = actor_uuid {
+            let public_statuses = Self::public_statuses();
+            client
+                .query_opt(
+                    "SELECT id, creator_id, title, description, status, created_at, updated_at FROM quests \
+                     WHERE id = $1 AND (creator_id = $2 OR LOWER(status) = ANY($3))",
+                    &[&quest_id, &actor_uuid, &public_statuses],
+                )
+                .await?
+        } else {
+            let public_statuses = Self::public_statuses();
+            client
+                .query_opt(
+                    "SELECT id, creator_id, title, description, status, created_at, updated_at FROM quests \
+                     WHERE id = $1 AND LOWER(status) = ANY($2)",
+                    &[&quest_id, &public_statuses],
+                )
+                .await?
+        };
         match row {
             Some(row) => Ok(Some(Self::row_to_value(&row)?)),
             None => Ok(None),
