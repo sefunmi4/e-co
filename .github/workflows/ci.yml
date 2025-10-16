@@ -27,6 +27,12 @@ jobs:
             playwright_config: apps/web/ether-pod/playwright.config.ts
             build_command: ''
             lint_command: ''
+          - name: Ethos Playwright Flow
+            workspace: apps/web/ether-pod
+            vitest_config: ''
+            playwright_config: apps/web/ethos/tests/playwright.config.ts
+            build_command: ''
+            lint_command: ''
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
