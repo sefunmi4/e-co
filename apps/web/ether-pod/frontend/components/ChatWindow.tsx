@@ -39,6 +39,7 @@ export default function ChatWindow({ conversationId, index }: ChatWindowProps) {
   const sendMessage = useEthosStore((state) => state.sendMessage);
   const setActiveRoom = useEthosStore((state) => state.setActiveRoom);
   const activeRoomId = useEthosStore((state) => state.activeRoomId);
+  const onlineCount = useEthosStore((state) => state.roomPresence[conversationId] ?? 0);
   const [draft, setDraft] = useState('');
 
   const messages = rawMessages ?? [];
@@ -92,6 +93,9 @@ export default function ChatWindow({ conversationId, index }: ChatWindowProps) {
               </h2>
               <p className="text-xs text-indigo-200/80" title={participantsLabel}>
                 {participantsLabel}
+                <span className="ml-1 inline-block text-[10px] uppercase tracking-wide text-indigo-200/60">
+                  {onlineCount === 1 ? "1 online" : `${onlineCount} online`}
+                </span>
               </p>
             </div>
             <button

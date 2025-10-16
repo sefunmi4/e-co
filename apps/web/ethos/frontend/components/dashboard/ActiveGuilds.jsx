@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -6,8 +6,12 @@ import { Users, Star, ArrowRight, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { motion } from "framer-motion";
+import usePresenceCounts from "@/hooks/usePresenceCounts";
 
 export default function ActiveGuilds({ guilds, isLoading }) {
+  const guildIds = useMemo(() => guilds.map((guild) => guild.id).filter(Boolean), [guilds]);
+  const presenceCounts = usePresenceCounts("guilds", guildIds);
+
   return (
     <Card className="feed-card">
       <CardHeader>
@@ -50,6 +54,12 @@ export default function ActiveGuilds({ guilds, isLoading }) {
                       <span>{guild.member_count || 0} members</span>
                       <span>•</span>
                       <span>{guild.quest_count || 0} posts</span>
+                      <span>•</span>
+                      <span>
+                        {(presenceCounts[guild.id] ?? 0) === 1
+                          ? "1 online"
+                          : `${presenceCounts[guild.id] ?? 0} online`}
+                      </span>
                     </div>
                   </div>
                 </div>

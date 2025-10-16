@@ -10,6 +10,7 @@ export default function LauncherMenu() {
   const roomsRecord = useEthosStore((state) => state.rooms);
   const status = useEthosStore((state) => state.status);
   const openConversation = useEthosStore((state) => state.openConversation);
+  const roomPresence = useEthosStore((state) => state.roomPresence);
 
   const rooms = useMemo(() => Object.values(roomsRecord), [roomsRecord]);
 
@@ -66,8 +67,13 @@ export default function LauncherMenu() {
                   role="menuitem"
                 >
                   <div className="text-sm font-medium">{room.topic}</div>
-                  <div className="text-xs text-indigo-200/80 truncate">
-                    {room.participantIds.join(', ') || 'No participants'}
+                  <div className="flex items-center justify-between text-xs text-indigo-200/80 gap-2 truncate">
+                    <span className="truncate">{room.participantIds.join(', ') || 'No participants'}</span>
+                    <span className="shrink-0">
+                      {(roomPresence[room.id] ?? 0) === 1
+                        ? '1 online'
+                        : `${roomPresence[room.id] ?? 0} online`}
+                    </span>
                   </div>
                 </button>
               </li>

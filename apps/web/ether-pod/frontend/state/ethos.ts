@@ -3,6 +3,7 @@
 import { env } from "@e-co/config";
 import { create } from "zustand";
 import type { StoreApi } from "zustand";
+import { io, type Socket } from "socket.io-client";
 import {
   createPromiseClient,
   type Interceptor,
@@ -54,6 +55,14 @@ type MessageStreamMap = Record<string, AbortController>;
 
 export type EthosStatus = "idle" | "connecting" | "ready" | "error";
 
+type PresenceNamespace = "pods" | "guilds" | "rooms";
+
+interface PresenceEnvelope {
+  namespace: PresenceNamespace;
+  roomId: string;
+  count: number;
+}
+
 export interface EthosState {
   status: EthosStatus;
   session?: EthosSession;
@@ -62,6 +71,7 @@ export interface EthosState {
   rooms: Record<string, ConversationSummary>;
   roster: Record<string, RosterEntry>;
   messageBuffers: Record<string, NormalizedMessage[]>;
+  roomPresence: Record<string, number>;
   openRooms: string[];
   activeRoomId?: string;
   messageStreams: MessageStreamMap;
@@ -211,6 +221,75 @@ const teardownStreams = (state: EthosState) => {
   state.presenceController?.abort();
 };
 
+const realtimePath = "/realtime";
+const shouldUseRealtime =
+  typeof window !== "undefined" && (env.web.enableSocketIo || env.web.enableSocket);
+
+let roomsSocket: Socket | undefined;
+let roomsPresenceHandler: ((payload: PresenceEnvelope) => void) | undefined;
+const joinedRooms = new Set<string>();
+
+const getRealtimeBaseUrl = () => resolveGatewayUrl().replace(/\/$/, "");
+
+const ensureRoomsSocket = (api: StoreApi<EthosState>) => {
+  if (!shouldUseRealtime) return undefined;
+  if (roomsSocket) return roomsSocket;
+  roomsSocket = io(`${getRealtimeBaseUrl()}/rooms`, {
+    path: realtimePath,
+    transports: ["websocket"],
+    autoConnect: true,
+  });
+  roomsSocket.on("connect_error", (error) => {
+    console.warn("Unable to connect to realtime rooms namespace", error);
+  });
+  roomsPresenceHandler = (payload: PresenceEnvelope) => {
+    if (payload.namespace !== "rooms") return;
+    api.setState((prev) => ({
+      roomPresence: {
+        ...prev.roomPresence,
+        [payload.roomId]: payload.count,
+      },
+    }));
+  };
+  roomsSocket.on("presence", roomsPresenceHandler);
+  return roomsSocket;
+};
+
+const joinRoomsPresence = (api: StoreApi<EthosState>, roomIds: Iterable<string>) => {
+  const socket = ensureRoomsSocket(api);
+  if (!socket) return;
+  for (const value of roomIds) {
+    const roomId = typeof value === "string" ? value.trim() : String(value ?? "").trim();
+    if (!roomId || joinedRooms.has(roomId)) continue;
+    joinedRooms.add(roomId);
+    socket.emit("join", { roomId });
+  }
+};
+
+const leaveRoomsPresence = (roomIds: Iterable<string>) => {
+  if (!roomsSocket) return;
+  for (const value of roomIds) {
+    const roomId = typeof value === "string" ? value.trim() : String(value ?? "").trim();
+    if (!roomId || !joinedRooms.delete(roomId)) continue;
+    roomsSocket.emit("leave", { roomId });
+  }
+};
+
+const resetRoomsPresence = (api: StoreApi<EthosState>) => {
+  if (roomsSocket) {
+    const rooms = Array.from(joinedRooms);
+    rooms.forEach((roomId) => roomsSocket!.emit("leave", { roomId }));
+    if (roomsPresenceHandler) {
+      roomsSocket.off("presence", roomsPresenceHandler);
+      roomsPresenceHandler = undefined;
+    }
+    roomsSocket.disconnect();
+    roomsSocket = undefined;
+  }
+  joinedRooms.clear();
+  api.setState({ roomPresence: {} });
+};
+
 const beginPresenceStream = (
   client: ConversationsClient,
   userIds: string[],
@@ -318,8 +397,10 @@ export const useEthosStore = create<EthosState>((set, get, api) => ({
   rooms: {},
   roster: {},
   messageBuffers: {},
+  roomPresence: {},
   openRooms: [],
   messageStreams: {},
+  presenceController: undefined,
   async bootstrap() {
     if (get().status !== "idle" || get().session) return;
     const session = resolveSessionFromEnv();
@@ -359,11 +440,15 @@ export const useEthosStore = create<EthosState>((set, get, api) => ({
         openRooms: nextOpen,
         activeRoomId: nextOpen[0],
         messageBuffers: {},
+        roomPresence: {},
       });
 
       if (typeof window !== "undefined") {
         window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(session));
       }
+
+      ensureRoomsSocket(api);
+      joinRoomsPresence(api, nextOpen);
 
       if (nextOpen[0]) {
         await get().openConversation(nextOpen[0]);
@@ -380,6 +465,7 @@ export const useEthosStore = create<EthosState>((set, get, api) => ({
   },
   disconnect() {
     teardownStreams(get());
+    resetRoomsPresence(api);
     set({
       status: "idle",
       session: undefined,
@@ -387,6 +473,7 @@ export const useEthosStore = create<EthosState>((set, get, api) => ({
       rooms: {},
       roster: {},
       messageBuffers: {},
+      roomPresence: {},
       openRooms: [],
       activeRoomId: undefined,
       messageStreams: {},
@@ -402,6 +489,7 @@ export const useEthosStore = create<EthosState>((set, get, api) => ({
     if (!get().openRooms.includes(conversationId)) {
       set((state) => ({ openRooms: [...state.openRooms, conversationId] }));
     }
+    joinRoomsPresence(api, [conversationId]);
     startMessageStream(client, conversationId, api);
     set({ activeRoomId: conversationId });
   },
@@ -419,6 +507,7 @@ export const useEthosStore = create<EthosState>((set, get, api) => ({
         messageStreams: restStreams,
       };
     });
+    leaveRoomsPresence([conversationId]);
   },
   setActiveRoom(conversationId) {
     if (!get().openRooms.includes(conversationId)) {
