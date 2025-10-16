@@ -5,9 +5,10 @@ use argon2::{
     Argon2,
 };
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Extension, Json};
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use jsonwebtoken::{encode, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tokio_postgres::{error::SqlState, Row};
 use tracing::error;
 use uuid::Uuid;
@@ -39,14 +40,32 @@ pub struct GuestLoginRequest {
     pub display_name: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct RefreshRequest {
+    pub session_id: String,
+    pub refresh_token: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct SessionResponse {
     pub token: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub refresh_token: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub refresh_session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub refresh_expires_at: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub matrix_access_token: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub matrix_homeserver: Option<String>,
     pub user: SessionUser,
+}
+
+struct RefreshTokenBundle {
+    refresh_token: String,
+    session_id: Uuid,
+    expires_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Serialize)]
@@ -119,7 +138,15 @@ pub async fn login(
         .verify_password(password.as_bytes(), &parsed_hash)
         .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid credentials"))?;
 
-    let response = build_session_response(state.as_ref(), &user, matrix_access_token)?;
+    let refresh = create_refresh_session(&*client, user.id)
+        .await
+        .map_err(|error| {
+            error!(error = ?error, "failed to create refresh session during login");
+            (StatusCode::INTERNAL_SERVER_ERROR, "Failed to authenticate")
+        })?;
+
+    let response =
+        build_session_response(state.as_ref(), &user, matrix_access_token, Some(refresh))?;
 
     Ok(Json(response))
 }
@@ -193,7 +220,17 @@ pub async fn register(
         (StatusCode::INTERNAL_SERVER_ERROR, "Failed to register user")
     })?;
 
-    let response = build_session_response(state.as_ref(), &user, None)?;
+    let refresh = create_refresh_session(&*client, user.id)
+        .await
+        .map_err(|error| {
+            error!(
+                error = ?error,
+                "failed to create refresh session during registration"
+            );
+            (StatusCode::INTERNAL_SERVER_ERROR, "Failed to register user")
+        })?;
+
+    let response = build_session_response(state.as_ref(), &user, None, Some(refresh))?;
 
     Ok(Json(response))
 }
@@ -253,7 +290,116 @@ pub async fn guest_login(
         )
     })?;
 
-    let response = build_session_response(state.as_ref(), &user, None)?;
+    let refresh = create_refresh_session(&*client, user.id)
+        .await
+        .map_err(|error| {
+            error!(
+                error = ?error,
+                "failed to create refresh session during guest login"
+            );
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to authenticate guest",
+            )
+        })?;
+
+    let response = build_session_response(state.as_ref(), &user, None, Some(refresh))?;
+
+    Ok(Json(response))
+}
+
+pub async fn refresh(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(request): Json<RefreshRequest>,
+) -> Result<Json<SessionResponse>, (StatusCode, &'static str)> {
+    let RefreshRequest {
+        session_id,
+        refresh_token,
+    } = request;
+
+    if refresh_token.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "Missing refresh token"));
+    }
+
+    let session_id = Uuid::parse_str(session_id.trim())
+        .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid session id"))?;
+
+    let client = state.db.get().await.map_err(|error| {
+        error!(error = ?error, "failed to acquire database connection for refresh");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to refresh session",
+        )
+    })?;
+
+    let provided_hash = hash_refresh_token(&refresh_token);
+    let new_refresh_token = generate_refresh_token();
+    let new_hash = hash_refresh_token(&new_refresh_token);
+    let expires_at = refresh_expiration();
+
+    let row = client
+        .query_opt(
+            "UPDATE refresh_sessions \
+             SET refresh_token_hash = $1, expires_at = $2, updated_at = NOW() \
+             WHERE session_id = $3 AND refresh_token_hash = $4 \
+                 AND revoked_at IS NULL AND expires_at > NOW() \
+             RETURNING user_id",
+            &[&new_hash, &expires_at, &session_id, &provided_hash],
+        )
+        .await
+        .map_err(|error| {
+            error!(error = ?error, "failed to rotate refresh session");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to refresh session",
+            )
+        })?
+        .ok_or((StatusCode::UNAUTHORIZED, "Invalid refresh token"))?;
+
+    let user_id: Uuid = row.try_get("user_id").map_err(|error| {
+        error!(
+            error = ?error,
+            "failed to decode user id while rotating refresh session"
+        );
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to refresh session",
+        )
+    })?;
+
+    let user_row = client
+        .query_opt(
+            "SELECT id, email, password_hash, display_name, is_guest FROM users WHERE id = $1",
+            &[&user_id],
+        )
+        .await
+        .map_err(|error| {
+            error!(
+                error = ?error,
+                "failed to fetch user while generating refreshed session"
+            );
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to refresh session",
+            )
+        })?
+        .ok_or((StatusCode::UNAUTHORIZED, "Invalid refresh token"))?;
+
+    let user = DbUser::from_row(&user_row).map_err(|error| {
+        error!(error = ?error, "failed to parse user record during refresh");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to refresh session",
+        )
+    })?;
+
+    let refresh_bundle = RefreshTokenBundle {
+        refresh_token: new_refresh_token,
+        session_id,
+        expires_at,
+    };
+
+    let response = build_session_response(state.as_ref(), &user, None, Some(refresh_bundle))?;
 
     Ok(Json(response))
 }
@@ -264,6 +410,9 @@ pub async fn session(
 ) -> Json<SessionResponse> {
     Json(SessionResponse {
         token: auth.token,
+        refresh_token: None,
+        refresh_session_id: None,
+        refresh_expires_at: None,
         matrix_access_token: state
             .config
             .matrix
@@ -291,6 +440,7 @@ fn build_session_response(
     state: &AppState,
     user: &DbUser,
     matrix_override: Option<String>,
+    refresh: Option<RefreshTokenBundle>,
 ) -> Result<SessionResponse, (StatusCode, &'static str)> {
     let claims = auth::Claims {
         sub: user.id.to_string(),
@@ -322,6 +472,9 @@ fn build_session_response(
 
     Ok(SessionResponse {
         token,
+        refresh_token: refresh.as_ref().map(|bundle| bundle.refresh_token.clone()),
+        refresh_session_id: refresh.as_ref().map(|bundle| bundle.session_id.to_string()),
+        refresh_expires_at: refresh.as_ref().map(|bundle| bundle.expires_at),
         matrix_access_token,
         matrix_homeserver,
         user: SessionUser {
@@ -331,4 +484,43 @@ fn build_session_response(
             is_guest: user.is_guest,
         },
     })
+}
+
+async fn create_refresh_session(
+    client: &tokio_postgres::Client,
+    user_id: Uuid,
+) -> Result<RefreshTokenBundle, tokio_postgres::Error> {
+    let session_id = Uuid::new_v4();
+    let refresh_token = generate_refresh_token();
+    let refresh_token_hash = hash_refresh_token(&refresh_token);
+    let expires_at = refresh_expiration();
+    let id = Uuid::new_v4();
+
+    client
+        .execute(
+            "INSERT INTO refresh_sessions (id, user_id, session_id, refresh_token_hash, expires_at) \
+             VALUES ($1, $2, $3, $4, $5)",
+            &[&id, &user_id, &session_id, &refresh_token_hash, &expires_at],
+        )
+        .await?;
+
+    Ok(RefreshTokenBundle {
+        refresh_token,
+        session_id,
+        expires_at,
+    })
+}
+
+fn generate_refresh_token() -> String {
+    format!("{}{}", Uuid::new_v4(), Uuid::new_v4())
+}
+
+fn hash_refresh_token(token: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(token.as_bytes());
+    hex::encode(hasher.finalize())
+}
+
+fn refresh_expiration() -> DateTime<Utc> {
+    Utc::now() + Duration::days(30)
 }

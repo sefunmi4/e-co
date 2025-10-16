@@ -28,6 +28,10 @@
     "./logger": {
       "types": "./dist/logger.d.ts",
       "default": "./dist/logger.js"
+    },
+    "./auth": {
+      "types": "./dist/auth.d.ts",
+      "default": "./dist/auth.js"
     }
   },
   "scripts": {
