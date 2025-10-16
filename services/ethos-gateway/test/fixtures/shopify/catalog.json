@@ -1,0 +1,42 @@
+{
+  "products": [
+    {
+      "id": "shopify-prod-poster",
+      "title": "Generative Poster Series",
+      "body_html": "Limited run posters inspired by the Ether synth suite.",
+      "tags": "poster, art, limited",
+      "variants": [
+        {
+          "id": "shopify-poster-a1",
+          "sku": "POST-A1",
+          "price": "35.00",
+          "currency": "USD",
+          "options": [
+            { "name": "Size", "value": "A1" },
+            { "name": "Finish", "value": "Matte" }
+          ]
+        },
+        {
+          "id": "shopify-poster-a2",
+          "sku": "POST-A2",
+          "price": "40.00",
+          "currency": "USD",
+          "options": [
+            { "name": "Size", "value": "A2" },
+            { "name": "Finish", "value": "Gloss" }
+          ]
+        },
+        {
+          "id": "shopify-poster-a3",
+          "sku": "POST-A3",
+          "price": "28",
+          "currency": "USD",
+          "options": [
+            { "name": "Size", "value": "A3" },
+            { "name": "Finish", "value": "Matte" }
+          ]
+        }
+      ]
+    }
+  ]
+}
