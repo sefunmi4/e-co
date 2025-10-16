@@ -9,6 +9,7 @@ import { Users, Plus, Settings, ArrowLeft, FileText, MessageSquare, Folder, Eye,
 import QuestCard from '../components/dashboard/QuestCard';
 import GuildQuestBoard from '../components/guild/GuildQuestBoard';
 import { createPageUrl } from '@/utils';
+import usePresenceCounts from '@/hooks/usePresenceCounts';
 
 export default function GuildDetail() {
     const [searchParams] = useSearchParams();
@@ -23,6 +24,9 @@ export default function GuildDetail() {
     const [isLoading, setIsLoading] = useState(true);
     const [members, setMembers] = useState([]); // Added members state
     const [userLikesMap, setUserLikesMap] = useState(new Map());
+
+    const presenceCounts = usePresenceCounts('guilds', guild ? [guild.id] : []);
+    const onlineCount = guild ? presenceCounts[guild.id] ?? 0 : 0;
 
     const loadGuildData = useCallback(async () => {
         if (!guildId) return;
@@ -231,6 +235,11 @@ export default function GuildDetail() {
                                             {guild.is_public && !guild.is_party ? <Eye className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
                                             <span>{guild.is_public && !guild.is_party ? "Public" : "Private"}</span>
                                         </Badge>
+                                    </div>
+                                    <div className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                        {onlineCount === 1
+                                            ? '1 member currently online'
+                                            : `${onlineCount} members currently online`}
                                     </div>
                                 </div>
                             </div>

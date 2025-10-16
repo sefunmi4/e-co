@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Guild, User, GuildMembership, Quest } from "@/api/entities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +25,7 @@ import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { motion } from "framer-motion";
 import { getUserDisplayName } from "../shared/UserDisplay";
+import usePresenceCounts from "@/hooks/usePresenceCounts";
 
 const guildTypeColors = {
   creator: "border-purple-200 bg-purple-50 text-purple-800 dark:border-purple-700 dark:bg-purple-900/30 dark:text-purple-200",
@@ -48,6 +49,9 @@ export default function GuildsView() {
   const [searchTerm, setSearchTerm] = useState("");
   const [guildTypeFilter, setGuildTypeFilter] = useState("all");
   const [joinedGuildsFilter, setJoinedGuildsFilter] = useState("all");
+
+  const guildIds = useMemo(() => guilds.map((guild) => guild.id).filter(Boolean), [guilds]);
+  const presenceCounts = usePresenceCounts("guilds", guildIds);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -348,7 +352,7 @@ export default function GuildsView() {
                         : guild.description}
                     </p>
 
-                    <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    <div className="flex items-center justify-between gap-4 text-sm text-gray-500 dark:text-gray-400 mb-4">
                       <div className="flex items-center gap-1">
                         <Users className="w-4 h-4" />
                         <span>{guild.member_count || 0} members</span>
@@ -356,6 +360,14 @@ export default function GuildsView() {
                       <div className="flex items-center gap-1">
                         <FileText className="w-4 h-4" />
                         <span>{guild.quest_count || 0} posts</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Eye className="w-4 h-4" />
+                        <span>
+                          {(presenceCounts[guild.id] ?? 0) === 1
+                            ? "1 online"
+                            : `${presenceCounts[guild.id] ?? 0} online`}
+                        </span>
                       </div>
                     </div>
 
