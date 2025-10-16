@@ -7,7 +7,7 @@ use ethos_gateway::{
     config::GatewayConfig,
     grpc,
     matrix::matrix_bridge_from_config,
-    migrations::run_migrations,
+    migrations::{run_demo_seed, run_migrations},
     router,
     services::{
         EventPublisher, GuildService, InMemoryRoomService, NatsPublisher, NoopPublisher,
@@ -27,6 +27,9 @@ async fn main() -> anyhow::Result<()> {
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
+    let args: Vec<String> = std::env::args().collect();
+    let command = args.get(1).map(|arg| arg.as_str());
+
     let config = GatewayConfig::from_env()?;
     tracing::info!(http = %config.http_addr, grpc = %config.grpc_addr, "starting ethos-gateway");
 
@@ -38,6 +41,12 @@ async fn main() -> anyhow::Result<()> {
         .create_pool(None, NoTls)
         .context("failed to create postgres pool")?;
     run_migrations(&db).await?;
+
+    if let Some("seed-demo-data") = command {
+        run_demo_seed(&db).await?;
+        tracing::info!("demo data seed complete");
+        return Ok(());
+    }
     let publisher: Arc<dyn EventPublisher> = match &config.nats_url {
         Some(url) => match NatsPublisher::connect(url).await {
             Ok(client) => Arc::new(client),
