@@ -108,9 +108,10 @@ pub async fn list_quest_applications(
     State(state): State<Arc<AppState>>,
     auth: AuthSession,
 ) -> ApiResult<Json<Vec<Value>>> {
+    let actor_id = auth.user_id.clone();
     let quest = state
         .quest_service
-        .get(None, &id)
+        .get(Some(actor_id.as_str()), &id)
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to load quest"))?;
     if quest.is_none() {
@@ -118,7 +119,7 @@ pub async fn list_quest_applications(
     }
     let applications = state
         .quest_service
-        .list_applications(&auth.user_id, &id)
+        .list_applications(&actor_id, &id)
         .await
         .map_err(|_| {
             (
@@ -135,15 +136,16 @@ pub async fn apply_to_quest(
     auth: AuthSession,
     payload: Option<Json<Value>>,
 ) -> ApiResult<(StatusCode, Json<Value>)> {
+    let actor_id = auth.user_id.clone();
     let quest = state
         .quest_service
-        .get(None, &id)
+        .get(Some(actor_id.as_str()), &id)
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to load quest"))?;
     let Some(quest) = quest else {
         return Err((StatusCode::NOT_FOUND, "Quest not found"));
     };
-    if quest.get("creator_id").and_then(Value::as_str) == Some(auth.user_id.as_str()) {
+    if quest.get("creator_id").and_then(Value::as_str) == Some(actor_id.as_str()) {
         return Err((
             StatusCode::FORBIDDEN,
             "Quest creators cannot apply to their own quest",
@@ -158,7 +160,7 @@ pub async fn apply_to_quest(
     }
     let application = state
         .quest_service
-        .apply(&auth.user_id, &id, payload_value)
+        .apply(&actor_id, &id, payload_value)
         .await
         .map_err(|_| {
             (
@@ -181,15 +183,16 @@ pub async fn approve_quest_application(
     auth: AuthSession,
     payload: Option<Json<Value>>,
 ) -> ApiResult<Json<Value>> {
+    let actor_id = auth.user_id.clone();
     let quest = state
         .quest_service
-        .get(None, &quest_id)
+        .get(Some(actor_id.as_str()), &quest_id)
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to load quest"))?;
     let Some(quest) = quest else {
         return Err((StatusCode::NOT_FOUND, "Quest not found"));
     };
-    if quest.get("creator_id").and_then(Value::as_str) != Some(auth.user_id.as_str()) {
+    if quest.get("creator_id").and_then(Value::as_str) != Some(actor_id.as_str()) {
         return Err((
             StatusCode::FORBIDDEN,
             "Only quest owners may approve applications",
@@ -204,7 +207,7 @@ pub async fn approve_quest_application(
     }
     let application = state
         .quest_service
-        .approve_application(&auth.user_id, &quest_id, &application_id, payload_value)
+        .approve_application(&actor_id, &quest_id, &application_id, payload_value)
         .await
         .map_err(|_| {
             (
@@ -224,15 +227,16 @@ pub async fn reject_quest_application(
     auth: AuthSession,
     payload: Option<Json<Value>>,
 ) -> ApiResult<Json<Value>> {
+    let actor_id = auth.user_id.clone();
     let quest = state
         .quest_service
-        .get(None, &quest_id)
+        .get(Some(actor_id.as_str()), &quest_id)
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to load quest"))?;
     let Some(quest) = quest else {
         return Err((StatusCode::NOT_FOUND, "Quest not found"));
     };
-    if quest.get("creator_id").and_then(Value::as_str) != Some(auth.user_id.as_str()) {
+    if quest.get("creator_id").and_then(Value::as_str) != Some(actor_id.as_str()) {
         return Err((
             StatusCode::FORBIDDEN,
             "Only quest owners may reject applications",
@@ -247,7 +251,7 @@ pub async fn reject_quest_application(
     }
     let application = state
         .quest_service
-        .reject_application(&auth.user_id, &quest_id, &application_id, payload_value)
+        .reject_application(&actor_id, &quest_id, &application_id, payload_value)
         .await
         .map_err(|_| {
             (
@@ -266,12 +270,13 @@ pub async fn stream_quest(
     Path(id): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, StatusCode> {
-    let claims = auth::decode_token(&state.config.jwt_secret, &query.token)
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let user_id = auth::decode_token(&state.config.jwt_secret, &query.token)
+        .map_err(|_| StatusCode::UNAUTHORIZED)?
+        .sub;
 
     let quest = state
         .quest_service
-        .get(None, &id)
+        .get(Some(user_id.as_str()), &id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let Some(quest) = quest else {
@@ -279,7 +284,7 @@ pub async fn stream_quest(
     };
     let applications = state
         .quest_service
-        .list_applications(&claims.sub, &id)
+        .list_applications(&user_id, &id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let mut receiver = state

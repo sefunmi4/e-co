@@ -671,7 +671,7 @@ async fn rest_guilds_and_quests_endpoints() {
     let quest_create = json!({
         "title": "Quest Persistence",
         "description": "Ensure quests survive pool resets",
-        "status": "open",
+        "status": "published",
     });
     let quest_response = app
         .clone()
@@ -822,6 +822,170 @@ async fn rest_guilds_and_quests_endpoints() {
         .await
         .unwrap();
     assert_eq!(guild_missing.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn quest_visibility_controls_drafts() {
+    let (_config, app_state, _room_service, _publisher) = build_state().await;
+    let app = router(app_state.clone());
+
+    let creator_email = format!("quest-owner+{}@example.com", Uuid::new_v4());
+    let register = register_user(&app, &creator_email, "password").await;
+    let creator_id = register["user"]["id"].as_str().unwrap().to_string();
+    let creator_session = login(&app, &creator_email, "password").await;
+    let creator_token = creator_session["token"].as_str().unwrap();
+
+    let quest_create = json!({
+        "title": "Hidden Quest",
+        "description": "Only the owner should see this draft",
+    });
+    let create_response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri("/api/quests")
+                .header("authorization", format!("Bearer {creator_token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(quest_create.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create_response.status(), StatusCode::CREATED);
+    let created_body = body::to_bytes(create_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let created: serde_json::Value = serde_json::from_slice(&created_body).unwrap();
+    let quest_id = created["id"].as_str().unwrap().to_string();
+
+    let owner_get = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri(format!("/api/quests/{quest_id}"))
+                .header("authorization", format!("Bearer {creator_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(owner_get.status(), StatusCode::OK);
+
+    let unauth_get = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri(format!("/api/quests/{quest_id}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(unauth_get.status(), StatusCode::NOT_FOUND);
+
+    let viewer_email = format!("quest-viewer+{}@example.com", Uuid::new_v4());
+    register_user(&app, &viewer_email, "password").await;
+    let viewer_session = login(&app, &viewer_email, "password").await;
+    let viewer_token = viewer_session["token"].as_str().unwrap();
+
+    let viewer_get = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri(format!("/api/quests/{quest_id}"))
+                .header("authorization", format!("Bearer {viewer_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(viewer_get.status(), StatusCode::NOT_FOUND);
+
+    let public_list = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri("/api/quests")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(public_list.status(), StatusCode::OK);
+    let public_body = body::to_bytes(public_list.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let public_quests: serde_json::Value = serde_json::from_slice(&public_body).unwrap();
+    assert!(public_quests.as_array().unwrap().is_empty());
+
+    let publish_body = json!({ "status": "published" });
+    let publish_response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("PUT")
+                .uri(format!("/api/quests/{quest_id}"))
+                .header("authorization", format!("Bearer {creator_token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(publish_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(publish_response.status(), StatusCode::OK);
+
+    let public_get = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri(format!("/api/quests/{quest_id}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(public_get.status(), StatusCode::OK);
+
+    let viewer_get_published = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri(format!("/api/quests/{quest_id}"))
+                .header("authorization", format!("Bearer {viewer_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(viewer_get_published.status(), StatusCode::OK);
+
+    let published_list = app
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri("/api/quests")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(published_list.status(), StatusCode::OK);
+    let published_body = body::to_bytes(published_list.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let published_quests: serde_json::Value = serde_json::from_slice(&published_body).unwrap();
+    let quests_array = published_quests.as_array().unwrap();
+    assert_eq!(quests_array.len(), 1);
+    assert_eq!(quests_array[0]["id"].as_str(), Some(quest_id.as_str()));
+    assert_eq!(quests_array[0]["creator_id"].as_str(), Some(creator_id.as_str()));
+    assert_eq!(quests_array[0]["status"].as_str(), Some("published"));
 }
 
 #[tokio::test]
