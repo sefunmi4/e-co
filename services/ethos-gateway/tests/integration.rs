@@ -68,7 +68,7 @@ async fn reset_database(db: &Pool) {
         .expect("failed to acquire connection for test reset");
     client
         .batch_execute(
-            "TRUNCATE TABLE order_item_options, order_items, cart_item_options, cart_items, carts, artifact_variant_options, artifact_variants, memberships, quest_applications, quests, guilds, messages, conversations, pod_items, pods, artifacts, orders, users RESTART IDENTITY CASCADE;",
+            "TRUNCATE TABLE order_item_options, order_items, cart_item_options, cart_items, carts, artifact_variant_options, artifact_variants, memberships, quest_applications, quests, guilds, messages, conversations, pod_items, pods, artifacts, orders, refresh_sessions, users RESTART IDENTITY CASCADE;",
         )
         .await
         .expect("failed to reset database for tests");
@@ -177,6 +177,41 @@ async fn login(app: &Router, email: &str, password: &str) -> serde_json::Value {
     serde_json::from_slice(&bytes).unwrap()
 }
 
+async fn refresh_session(
+    app: &Router,
+    session_id: &str,
+    refresh_token: &str,
+) -> (StatusCode, serde_json::Value) {
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri("/auth/refresh")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "session_id": session_id,
+                        "refresh_token": refresh_token,
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let bytes = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let payload = if bytes.is_empty() {
+        serde_json::Value::Null
+    } else {
+        serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null)
+    };
+    (status, payload)
+}
+
 async fn make_stream_test_state() -> (GatewayConfig, Arc<AppState>, Arc<InMemoryRoomService>) {
     let config = make_config();
     let (app_state, room_service, _) = build_state_with_config(&config, true).await;
@@ -257,6 +292,38 @@ async fn rest_conversation_flow() {
             .len(),
         1
     );
+}
+
+#[tokio::test]
+async fn refresh_session_rotates_tokens() {
+    let (_config, app_state, _room_service, _publisher) = build_state().await;
+    let app = router(app_state.clone());
+
+    let email = format!("user+{}@example.com", Uuid::new_v4());
+    register_user(&app, &email, "password").await;
+    let session = login(&app, &email, "password").await;
+
+    let original_access_token = session["token"].as_str().unwrap().to_string();
+    let refresh_token = session["refresh_token"].as_str().unwrap();
+    let session_id = session["refresh_session_id"].as_str().unwrap();
+
+    let (status, refreshed) = refresh_session(&app, session_id, refresh_token).await;
+    assert_eq!(status, StatusCode::OK);
+    let next_refresh_token = refreshed["refresh_token"].as_str().unwrap();
+    let next_session_id = refreshed["refresh_session_id"].as_str().unwrap();
+    assert_eq!(next_session_id, session_id);
+    assert_ne!(next_refresh_token, refresh_token);
+    let refreshed_access_token = refreshed["token"].as_str().unwrap();
+    assert_ne!(refreshed_access_token, original_access_token);
+    assert!(refreshed["refresh_expires_at"].as_str().is_some());
+
+    let (replay_status, _) = refresh_session(&app, session_id, refresh_token).await;
+    assert_eq!(replay_status, StatusCode::UNAUTHORIZED);
+
+    let (next_status, rotated_again) = refresh_session(&app, session_id, next_refresh_token).await;
+    assert_eq!(next_status, StatusCode::OK);
+    let third_refresh_token = rotated_again["refresh_token"].as_str().unwrap();
+    assert_ne!(third_refresh_token, next_refresh_token);
 }
 
 #[tokio::test]
@@ -984,7 +1051,10 @@ async fn quest_visibility_controls_drafts() {
     let quests_array = published_quests.as_array().unwrap();
     assert_eq!(quests_array.len(), 1);
     assert_eq!(quests_array[0]["id"].as_str(), Some(quest_id.as_str()));
-    assert_eq!(quests_array[0]["creator_id"].as_str(), Some(creator_id.as_str()));
+    assert_eq!(
+        quests_array[0]["creator_id"].as_str(),
+        Some(creator_id.as_str())
+    );
     assert_eq!(quests_array[0]["status"].as_str(), Some("published"));
 }
 

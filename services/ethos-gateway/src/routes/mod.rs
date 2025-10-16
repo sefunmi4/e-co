@@ -48,6 +48,7 @@ pub fn router(state: AppState) -> Router {
         .route("/auth/login", post(login))
         .route("/auth/register", post(register))
         .route("/auth/guest", post(guest_login))
+        .route("/auth/refresh", post(refresh))
         .route("/auth/logout", post(logout))
         .route("/auth/session", get(session))
         .route(

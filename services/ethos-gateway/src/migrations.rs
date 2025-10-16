@@ -89,6 +89,10 @@ const MIGRATIONS: &[Migration] = &[
         "0015_create_quest_applications.sql",
         include_str!("../migrations/0015_create_quest_applications.sql"),
     ),
+    Migration::new(
+        "0017_create_refresh_sessions.sql",
+        include_str!("../migrations/0017_create_refresh_sessions.sql"),
+    ),
 ];
 
 const DEMO_SEED: Migration = Migration::new(
