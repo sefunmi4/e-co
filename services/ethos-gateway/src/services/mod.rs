@@ -23,6 +23,13 @@ pub enum ChatEvent {
     Presence(PresenceEvent),
 }
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct QuestEvent {
+    pub quest_id: String,
+    pub event: String,
+    pub data: Value,
+}
+
 #[async_trait]
 pub trait RoomService: Send + Sync {
     async fn list_conversations(&self, user_id: &str) -> anyhow::Result<Vec<Conversation>>;
@@ -224,6 +231,29 @@ pub trait QuestService: Send + Sync {
         payload: Value,
     ) -> anyhow::Result<Option<Value>>;
     async fn delete(&self, actor_id: &str, id: &str) -> anyhow::Result<bool>;
+    async fn apply(
+        &self,
+        actor_id: &str,
+        quest_id: &str,
+        payload: Value,
+    ) -> anyhow::Result<Option<Value>>;
+    async fn list_applications(&self, actor_id: &str, quest_id: &str)
+        -> anyhow::Result<Vec<Value>>;
+    async fn approve_application(
+        &self,
+        actor_id: &str,
+        quest_id: &str,
+        application_id: &str,
+        payload: Value,
+    ) -> anyhow::Result<Option<Value>>;
+    async fn reject_application(
+        &self,
+        actor_id: &str,
+        quest_id: &str,
+        application_id: &str,
+        payload: Value,
+    ) -> anyhow::Result<Option<Value>>;
+    async fn subscribe(&self, quest_id: &str) -> anyhow::Result<broadcast::Receiver<QuestEvent>>;
 }
 
 #[async_trait]

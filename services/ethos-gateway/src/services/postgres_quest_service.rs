@@ -1,23 +1,30 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, bail, Context};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use deadpool_postgres::Pool;
 use serde_json::{json, Value};
+use tokio::sync::{broadcast, RwLock};
 use tokio_postgres::{types::ToSql, Row};
 use uuid::Uuid;
 
-use super::QuestService;
+use super::{EventPublisher, QuestEvent, QuestService};
 
 #[derive(Clone)]
 pub struct PostgresQuestService {
     pool: Pool,
+    publisher: Arc<dyn EventPublisher>,
+    events: Arc<RwLock<HashMap<Uuid, broadcast::Sender<QuestEvent>>>>,
 }
 
 impl PostgresQuestService {
-    pub fn new(pool: Pool) -> Self {
-        Self { pool }
+    pub fn new(pool: Pool, publisher: Arc<dyn EventPublisher>) -> Self {
+        Self {
+            pool,
+            publisher,
+            events: Arc::new(RwLock::new(HashMap::new())),
+        }
     }
 
     fn row_to_value(row: &Row) -> anyhow::Result<Value> {
@@ -81,6 +88,80 @@ impl PostgresQuestService {
             .iter()
             .map(|item| Self::parse_uuid_value(item, key))
             .collect()
+    }
+
+    fn application_row_to_value(row: &Row) -> anyhow::Result<Value> {
+        let id: Uuid = row.try_get("id")?;
+        let quest_id: Uuid = row.try_get("quest_id")?;
+        let applicant_id: Uuid = row.try_get("applicant_id")?;
+        let status: String = row.try_get("status")?;
+        let note: Option<String> = row.try_get("note")?;
+        let decision_note: Option<String> = row.try_get("decision_note")?;
+        let reviewed_by: Option<Uuid> = row.try_get("reviewed_by")?;
+        let created_at: DateTime<Utc> = row.try_get("created_at")?;
+        let updated_at: DateTime<Utc> = row.try_get("updated_at")?;
+        Ok(json!({
+            "id": id.to_string(),
+            "quest_id": quest_id.to_string(),
+            "applicant_id": applicant_id.to_string(),
+            "status": status,
+            "note": note,
+            "decision_note": decision_note,
+            "reviewed_by": reviewed_by.map(|id| id.to_string()),
+            "created_at": created_at.to_rfc3339(),
+            "updated_at": updated_at.to_rfc3339(),
+        }))
+    }
+
+    fn extract_note_field(payload: &Value, field: &str) -> anyhow::Result<Option<String>> {
+        match payload {
+            Value::Null => Ok(None),
+            Value::Object(map) => match map.get(field) {
+                Some(Value::Null) | None => Ok(None),
+                Some(Value::String(value)) => {
+                    let note = value.trim().to_string();
+                    if note.is_empty() {
+                        Ok(None)
+                    } else {
+                        Ok(Some(note))
+                    }
+                }
+                Some(_) => bail!("{field} must be a string or null"),
+            },
+            _ => bail!("payload must be an object"),
+        }
+    }
+
+    async fn ensure_event_channel(&self, quest_id: &Uuid) -> broadcast::Sender<QuestEvent> {
+        let guard = self.events.read().await;
+        if let Some(sender) = guard.get(quest_id) {
+            return sender.clone();
+        }
+        drop(guard);
+        let mut guard = self.events.write().await;
+        guard
+            .entry(*quest_id)
+            .or_insert_with(|| broadcast::channel(256).0)
+            .clone()
+    }
+
+    async fn publish_event(&self, quest_id: &Uuid, event: &str, data: Value) -> anyhow::Result<()> {
+        let payload = QuestEvent {
+            quest_id: quest_id.to_string(),
+            event: event.to_string(),
+            data,
+        };
+        let sender = self.ensure_event_channel(quest_id).await;
+        let _ = sender.send(payload.clone());
+        let subject = format!("ethos.quests.{quest_id}");
+        let bytes = serde_json::to_vec(&payload)?;
+        self.publisher.publish(&subject, &bytes).await?;
+        Ok(())
+    }
+
+    async fn remove_event_channel(&self, quest_id: &Uuid) {
+        let mut guard = self.events.write().await;
+        guard.remove(quest_id);
     }
 }
 
@@ -251,7 +332,10 @@ impl QuestService for PostgresQuestService {
                 &[&id, &creator_id, &title, &description_param, &status],
             )
             .await?;
-        Self::row_to_value(&row)
+        let quest = Self::row_to_value(&row)?;
+        self.publish_event(&id, "quest.created", quest.clone())
+            .await?;
+        Ok(quest)
     }
 
     async fn update(
@@ -361,7 +445,10 @@ impl QuestService for PostgresQuestService {
             .commit()
             .await
             .context("commit update quest transaction")?;
-        Ok(Some(Self::row_to_value(&row)?))
+        let quest = Self::row_to_value(&row)?;
+        self.publish_event(&quest_id, "quest.updated", quest.clone())
+            .await?;
+        Ok(Some(quest))
     }
 
     async fn delete(&self, actor_id: &str, id: &str) -> anyhow::Result<bool> {
@@ -378,6 +465,311 @@ impl QuestService for PostgresQuestService {
                 &[&quest_id, &actor_uuid],
             )
             .await?;
-        Ok(deleted > 0)
+        if deleted > 0 {
+            self.publish_event(
+                &quest_id,
+                "quest.deleted",
+                json!({"id": quest_id.to_string()}),
+            )
+            .await?;
+            self.remove_event_channel(&quest_id).await;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    async fn apply(
+        &self,
+        actor_id: &str,
+        quest_id: &str,
+        payload: Value,
+    ) -> anyhow::Result<Option<Value>> {
+        let applicant_id = Self::parse_actor(actor_id)?;
+        let quest_uuid = Uuid::parse_str(quest_id).context("invalid quest id")?;
+        let note = Self::extract_note_field(&payload, "note")?;
+        let note_param: Option<&str> = note.as_deref();
+
+        let mut client = self
+            .pool
+            .get()
+            .await
+            .context("acquire connection for quest application")?;
+        let transaction = client
+            .transaction()
+            .await
+            .context("begin transaction for quest application")?;
+
+        let quest_row = transaction
+            .query_opt(
+                "SELECT creator_id FROM quests WHERE id = $1 FOR UPDATE",
+                &[&quest_uuid],
+            )
+            .await?;
+        let Some(quest_row) = quest_row else {
+            return Ok(None);
+        };
+        let creator_id: Uuid = quest_row.try_get("creator_id")?;
+        if creator_id == applicant_id {
+            return Ok(None);
+        }
+
+        let existing = transaction
+            .query_opt(
+                "SELECT id, status FROM quest_applications WHERE quest_id = $1 AND applicant_id = $2 FOR UPDATE",
+                &[&quest_uuid, &applicant_id],
+            )
+            .await?;
+
+        let row = if let Some(existing) = existing {
+            let status: String = existing.try_get("status")?;
+            if status == "approved" {
+                return Ok(None);
+            }
+            let application_id: Uuid = existing.try_get("id")?;
+            transaction
+                .query_one(
+                    "UPDATE quest_applications SET status = 'pending', note = $3, decision_note = NULL, reviewed_by = NULL, updated_at = NOW() \
+                     WHERE id = $1 \
+                     RETURNING id, quest_id, applicant_id, status, note, decision_note, reviewed_by, created_at, updated_at",
+                    &[&application_id, &quest_uuid, &note_param],
+                )
+                .await?
+        } else {
+            let application_id = Uuid::new_v4();
+            transaction
+                .query_one(
+                    "INSERT INTO quest_applications (id, quest_id, applicant_id, status, note) \
+                     VALUES ($1, $2, $3, 'pending', $4) \
+                     RETURNING id, quest_id, applicant_id, status, note, decision_note, reviewed_by, created_at, updated_at",
+                    &[&application_id, &quest_uuid, &applicant_id, &note_param],
+                )
+                .await?
+        };
+
+        transaction
+            .commit()
+            .await
+            .context("commit quest application transaction")?;
+
+        let application = Self::application_row_to_value(&row)?;
+        self.publish_event(&quest_uuid, "application.submitted", application.clone())
+            .await?;
+        Ok(Some(application))
+    }
+
+    async fn list_applications(
+        &self,
+        actor_id: &str,
+        quest_id: &str,
+    ) -> anyhow::Result<Vec<Value>> {
+        let actor_uuid = Self::parse_actor(actor_id)?;
+        let quest_uuid = Uuid::parse_str(quest_id).context("invalid quest id")?;
+        let client = self
+            .pool
+            .get()
+            .await
+            .context("acquire connection for list quest applications")?;
+
+        let quest_row = client
+            .query_opt(
+                "SELECT creator_id FROM quests WHERE id = $1",
+                &[&quest_uuid],
+            )
+            .await?;
+        let Some(quest_row) = quest_row else {
+            return Ok(Vec::new());
+        };
+        let creator_id: Uuid = quest_row.try_get("creator_id")?;
+
+        let rows = if creator_id == actor_uuid {
+            client
+                .query(
+                    "SELECT id, quest_id, applicant_id, status, note, decision_note, reviewed_by, created_at, updated_at \
+                     FROM quest_applications WHERE quest_id = $1 ORDER BY created_at ASC",
+                    &[&quest_uuid],
+                )
+                .await?
+        } else {
+            client
+                .query(
+                    "SELECT id, quest_id, applicant_id, status, note, decision_note, reviewed_by, created_at, updated_at \
+                     FROM quest_applications WHERE quest_id = $1 AND applicant_id = $2 ORDER BY created_at ASC",
+                    &[&quest_uuid, &actor_uuid],
+                )
+                .await?
+        };
+
+        rows.into_iter()
+            .map(|row| Self::application_row_to_value(&row))
+            .collect()
+    }
+
+    async fn approve_application(
+        &self,
+        actor_id: &str,
+        quest_id: &str,
+        application_id: &str,
+        payload: Value,
+    ) -> anyhow::Result<Option<Value>> {
+        let reviewer_id = Self::parse_actor(actor_id)?;
+        let quest_uuid = Uuid::parse_str(quest_id).context("invalid quest id")?;
+        let application_uuid = Uuid::parse_str(application_id).context("invalid application id")?;
+        let note = Self::extract_note_field(&payload, "note")?;
+        let note_param: Option<&str> = note.as_deref();
+
+        let mut client = self
+            .pool
+            .get()
+            .await
+            .context("acquire connection for approve quest application")?;
+        let transaction = client
+            .transaction()
+            .await
+            .context("begin transaction for approve quest application")?;
+
+        let quest_row = transaction
+            .query_opt(
+                "SELECT creator_id FROM quests WHERE id = $1 FOR UPDATE",
+                &[&quest_uuid],
+            )
+            .await?;
+        let Some(quest_row) = quest_row else {
+            return Ok(None);
+        };
+        let creator_id: Uuid = quest_row.try_get("creator_id")?;
+        if creator_id != reviewer_id {
+            return Ok(None);
+        }
+
+        let existing = transaction
+            .query_opt(
+                "SELECT id, status FROM quest_applications WHERE id = $1 AND quest_id = $2 FOR UPDATE",
+                &[&application_uuid, &quest_uuid],
+            )
+            .await?;
+        let Some(existing) = existing else {
+            return Ok(None);
+        };
+        let current_status: String = existing.try_get("status")?;
+        let status_changed = current_status != "approved";
+
+        let row = if status_changed {
+            transaction
+                .query_one(
+                    "UPDATE quest_applications SET status = 'approved', reviewed_by = $2, decision_note = $3, updated_at = NOW() \
+                     WHERE id = $1 \
+                     RETURNING id, quest_id, applicant_id, status, note, decision_note, reviewed_by, created_at, updated_at",
+                    &[&application_uuid, &reviewer_id, &note_param],
+                )
+                .await?
+        } else {
+            transaction
+                .query_one(
+                    "SELECT id, quest_id, applicant_id, status, note, decision_note, reviewed_by, created_at, updated_at \
+                     FROM quest_applications WHERE id = $1",
+                    &[&application_uuid],
+                )
+                .await?
+        };
+
+        transaction
+            .commit()
+            .await
+            .context("commit approve quest application transaction")?;
+
+        let application = Self::application_row_to_value(&row)?;
+        if status_changed {
+            self.publish_event(&quest_uuid, "application.approved", application.clone())
+                .await?;
+        }
+        Ok(Some(application))
+    }
+
+    async fn reject_application(
+        &self,
+        actor_id: &str,
+        quest_id: &str,
+        application_id: &str,
+        payload: Value,
+    ) -> anyhow::Result<Option<Value>> {
+        let reviewer_id = Self::parse_actor(actor_id)?;
+        let quest_uuid = Uuid::parse_str(quest_id).context("invalid quest id")?;
+        let application_uuid = Uuid::parse_str(application_id).context("invalid application id")?;
+        let note = Self::extract_note_field(&payload, "note")?;
+        let note_param: Option<&str> = note.as_deref();
+
+        let mut client = self
+            .pool
+            .get()
+            .await
+            .context("acquire connection for reject quest application")?;
+        let transaction = client
+            .transaction()
+            .await
+            .context("begin transaction for reject quest application")?;
+
+        let quest_row = transaction
+            .query_opt(
+                "SELECT creator_id FROM quests WHERE id = $1 FOR UPDATE",
+                &[&quest_uuid],
+            )
+            .await?;
+        let Some(quest_row) = quest_row else {
+            return Ok(None);
+        };
+        let creator_id: Uuid = quest_row.try_get("creator_id")?;
+        if creator_id != reviewer_id {
+            return Ok(None);
+        }
+
+        let existing = transaction
+            .query_opt(
+                "SELECT id, status FROM quest_applications WHERE id = $1 AND quest_id = $2 FOR UPDATE",
+                &[&application_uuid, &quest_uuid],
+            )
+            .await?;
+        let Some(existing) = existing else {
+            return Ok(None);
+        };
+        let current_status: String = existing.try_get("status")?;
+        let status_changed = current_status != "rejected";
+
+        let row = transaction
+            .query_one(
+                "UPDATE quest_applications SET status = 'rejected', reviewed_by = $2, decision_note = $3, updated_at = NOW() \
+                 WHERE id = $1 \
+                 RETURNING id, quest_id, applicant_id, status, note, decision_note, reviewed_by, created_at, updated_at",
+                &[&application_uuid, &reviewer_id, &note_param],
+            )
+            .await?;
+
+        transaction
+            .commit()
+            .await
+            .context("commit reject quest application transaction")?;
+
+        let application = Self::application_row_to_value(&row)?;
+        if status_changed {
+            self.publish_event(&quest_uuid, "application.rejected", application.clone())
+                .await?;
+        }
+        Ok(Some(application))
+    }
+
+    async fn subscribe(&self, quest_id: &str) -> anyhow::Result<broadcast::Receiver<QuestEvent>> {
+        let quest_uuid = Uuid::parse_str(quest_id).context("invalid quest id")?;
+        let client = self
+            .pool
+            .get()
+            .await
+            .context("acquire connection for subscribe quest events")?;
+        let exists = client
+            .query_opt("SELECT 1 FROM quests WHERE id = $1", &[&quest_uuid])
+            .await?;
+        if exists.is_none() {
+            bail!("quest not found");
+        }
+        Ok(self.ensure_event_channel(&quest_uuid).await.subscribe())
     }
 }
