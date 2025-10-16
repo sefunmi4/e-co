@@ -5,13 +5,16 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use chrono::Utc;
 use serde::Deserialize;
 use serde_json::Value;
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::{
+    analytics::{AnalyticsEvent, CheckoutStarted, EventOrigin, SaleRecorded},
     auth::AuthSession,
-    services::orders::{self, OrderChanges, OrderDetail},
+    services::orders::{self, OrderChanges, OrderDetail, UpdatedOrder},
     state::AppState,
 };
 
@@ -50,13 +53,22 @@ pub async fn create_order(
     Json(body): Json<CreateOrderRequest>,
 ) -> ApiResult<(StatusCode, Json<OrderDetail>)> {
     let user_id = parse_uuid(&auth.user_id)?;
-    let status = if body.status.trim().is_empty() {
+
+    let CreateOrderRequest {
+        status: raw_status,
+        metadata,
+    } = body;
+    let status = if raw_status.trim().is_empty() {
         default_order_status()
     } else {
-        body.status
+        raw_status
     };
-    match orders::checkout_order(&state.db, user_id, status, body.metadata).await {
-        Ok(order) => Ok((StatusCode::CREATED, Json(order))),
+    let metadata_clone = metadata.clone();
+    match orders::checkout_order(&state.db, user_id, status, metadata).await {
+        Ok(order) => {
+            emit_checkout_started(&state, user_id, &order, metadata_clone).await;
+            Ok((StatusCode::CREATED, Json(order)))
+        }
         Err(err) => {
             if err.to_string().contains("Cart is empty") {
                 Err((StatusCode::BAD_REQUEST, "Cart is empty"))
@@ -103,11 +115,15 @@ pub async fn update_order(
         status: body.status,
         metadata: body.metadata,
     };
+
     let updated = orders::update_order(&state.db, order_id, user_id, changes)
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to update order"))?;
     match updated {
-        Some(order) => Ok(Json(order)),
+        Some(updated) => {
+            emit_sale_recorded(&state, &updated).await;
+            Ok(Json(updated.detail))
+        }
         None => Err((StatusCode::NOT_FOUND, "Order not found")),
     }
 }
@@ -126,6 +142,53 @@ pub async fn delete_order(
         Ok(StatusCode::NO_CONTENT)
     } else {
         Err((StatusCode::NOT_FOUND, "Order not found"))
+    }
+}
+
+async fn emit_checkout_started(
+    state: &Arc<AppState>,
+    user_id: Uuid,
+    detail: &OrderDetail,
+    metadata: Value,
+) {
+    let item_count: u32 = detail
+        .items
+        .iter()
+        .map(|item| item.quantity.max(0) as u32)
+        .sum();
+    let event = AnalyticsEvent::CheckoutStarted(CheckoutStarted {
+        order_id: Some(detail.order.id),
+        user_id: Some(user_id),
+        cart_total_cents: Some(detail.order.total_cents),
+        item_count: Some(item_count),
+        occurred_at: Utc::now(),
+        origin: Some(EventOrigin::Server),
+        metadata: Some(metadata),
+    });
+    if let Err(error) = state.analytics.record(event).await {
+        warn!(%error, "failed to record checkout_started event");
+    }
+}
+
+async fn emit_sale_recorded(state: &Arc<AppState>, update: &UpdatedOrder) {
+    const SALE_STATUSES: &[&str] = &["completed", "fulfilled", "paid"];
+    let new_status = update.detail.order.status.to_lowercase();
+    if !SALE_STATUSES.contains(&new_status.as_str()) {
+        return;
+    }
+    if new_status == update.previous_status.to_lowercase() {
+        return;
+    }
+    let event = AnalyticsEvent::SaleRecorded(SaleRecorded {
+        order_id: update.detail.order.id,
+        user_id: update.detail.order.user_id,
+        total_cents: update.detail.order.total_cents,
+        occurred_at: Utc::now(),
+        origin: Some(EventOrigin::Server),
+        status: Some(update.detail.order.status.clone()),
+    });
+    if let Err(error) = state.analytics.record(event).await {
+        warn!(%error, "failed to record sale_recorded event");
     }
 }
 

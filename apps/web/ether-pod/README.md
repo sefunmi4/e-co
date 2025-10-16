@@ -54,3 +54,7 @@ npm test
 
 Vitest and Testing Library cover UI widgets and hooks. Add server-focused tests
 in `frontend/` or `backend/` as new capabilities land.
+
+## Analytics
+
+`frontend/lib/analytics.ts` centralises client-side tracking for pod entries and artifact views. `SnapshotSceneHydrator` emits events when a published experience hydrates so downstream services receive pod and artifact telemetry backed by the shared `shared/events` schema.

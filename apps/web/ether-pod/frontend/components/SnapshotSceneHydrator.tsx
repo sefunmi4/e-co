@@ -6,10 +6,13 @@ import {
   attachLightingManifest,
   detachLightingManifest,
 } from "@frontend/state/lighting";
+import { trackArtifactViewed, trackPodEntered } from "@frontend/lib/analytics";
 
 interface Props {
   slug: string;
   manifest: SnapshotManifest;
+  podId: string;
+  artifactId?: string | null;
   tour?: SnapshotTour | null;
 }
 
@@ -34,7 +37,7 @@ const exposeManifest = (manifest: SnapshotManifest, slug: string) => {
   scopedWindow.__ECO_ACTIVE_SCENE__ = { slug, manifest };
 };
 
-export default function SnapshotSceneHydrator({ slug, manifest, tour }: Props) {
+export default function SnapshotSceneHydrator({ slug, manifest, tour, podId, artifactId }: Props) {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -56,6 +59,19 @@ export default function SnapshotSceneHydrator({ slug, manifest, tour }: Props) {
       window.clearTimeout(timer);
     };
   }, [manifest, slug, tour]);
+
+  useEffect(() => {
+    if (!hydrated) {
+      return;
+    }
+    if (typeof window === 'undefined') {
+      return;
+    }
+    trackPodEntered({ podId, referrer: document?.referrer ?? undefined });
+    if (artifactId) {
+      trackArtifactViewed({ artifactId, podId, surface: slug });
+    }
+  }, [artifactId, hydrated, podId, slug]);
 
   if (!hydrated) {
     return (

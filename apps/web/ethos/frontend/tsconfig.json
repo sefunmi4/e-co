@@ -38,6 +38,9 @@
       ],
       "@/utils": [
         "./utils/index"
+      ],
+      "@shared/events": [
+        "../../../../shared/events/index"
       ]
     },
     "types": [

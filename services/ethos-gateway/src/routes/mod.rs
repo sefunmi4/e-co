@@ -9,6 +9,7 @@ use tower_http::cors::{Any, CorsLayer};
 
 use crate::state::AppState;
 
+mod analytics;
 mod artifacts;
 mod auth;
 mod conversations;
@@ -20,6 +21,7 @@ mod quests;
 mod stream;
 mod users;
 
+pub use analytics::*;
 pub use artifacts::*;
 pub use auth::*;
 pub use conversations::*;
@@ -51,6 +53,7 @@ pub fn router(state: AppState) -> Router {
         .route("/auth/refresh", post(refresh))
         .route("/auth/logout", post(logout))
         .route("/auth/session", get(session))
+        .route("/api/analytics/events", post(record_event))
         .route(
             "/api/conversations",
             get(list_conversations).post(create_conversation),

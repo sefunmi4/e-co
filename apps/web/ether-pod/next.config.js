@@ -5,6 +5,7 @@ const nextConfig = {
   experimental: {
     typedRoutes: true,
     serverActions: true,
+    externalDir: true,
   },
   webpack: (config) => {
     config.experiments = config.experiments || {};

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
+    analytics::DynAnalyticsSink,
     config::GatewayConfig,
     matrix::MatrixBridge,
     services::{EventPublisher, GuildService, QuestService, RoomService},
@@ -16,6 +17,7 @@ pub struct AppState {
     pub matrix: Arc<dyn MatrixBridge>,
     pub quest_service: Arc<dyn QuestService>,
     pub guild_service: Arc<dyn GuildService>,
+    pub analytics: DynAnalyticsSink,
 }
 
 impl AppState {
@@ -27,6 +29,7 @@ impl AppState {
         matrix: Arc<dyn MatrixBridge>,
         quest_service: Arc<dyn QuestService>,
         guild_service: Arc<dyn GuildService>,
+        analytics: DynAnalyticsSink,
     ) -> Self {
         Self {
             config,
@@ -36,6 +39,7 @@ impl AppState {
             matrix,
             quest_service,
             guild_service,
+            analytics,
         }
     }
 }

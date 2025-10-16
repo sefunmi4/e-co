@@ -104,3 +104,7 @@ automatically via `build.rs` in the gateway crate.
 Vitest and the Rust integration suite provide coverage for the shared Zustand
 stores, chat UI, and the gateway’s Matrix/gRPC behaviour. Run both regularly to
 catch regressions before shipping.
+
+## Analytics instrumentation
+
+The frontend wraps gateway requests in `api/client.js`, which now forwards checkout and order status changes to the analytics pipeline via `frontend/lib/analytics.ts`. Events are typed using the shared schema in `shared/events`.

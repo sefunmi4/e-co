@@ -113,6 +113,12 @@ pub struct OrderDetail {
     pub items: Vec<OrderItemDetail>,
 }
 
+#[derive(Debug, Clone)]
+pub struct UpdatedOrder {
+    pub detail: OrderDetail,
+    pub previous_status: String,
+}
+
 pub async fn list_orders(pool: &Pool, user_id: Uuid) -> anyhow::Result<Vec<OrderDetail>> {
     let client = pool
         .get()
@@ -215,7 +221,7 @@ pub async fn update_order(
     id: Uuid,
     user_id: Uuid,
     mut changes: OrderChanges,
-) -> anyhow::Result<Option<OrderDetail>> {
+) -> anyhow::Result<Option<UpdatedOrder>> {
     let mut client = pool
         .get()
         .await
@@ -238,6 +244,7 @@ pub async fn update_order(
     if order.user_id != user_id {
         return Ok(None);
     }
+    let previous_status = order.status.clone();
     if let Some(status) = changes.status.take() {
         order.status = status;
     }
@@ -266,7 +273,11 @@ pub async fn update_order(
         .commit()
         .await
         .context("commit update_order transaction")?;
-    Ok(Some(OrderDetail { order, items }))
+    let detail = OrderDetail { order, items };
+    Ok(Some(UpdatedOrder {
+        detail,
+        previous_status,
+    }))
 }
 
 pub async fn delete_order(pool: &Pool, id: Uuid, user_id: Uuid) -> anyhow::Result<bool> {

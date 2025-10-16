@@ -6,6 +6,7 @@ use axum::http::{Request as HttpRequest, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Extension, Router};
 use deadpool_postgres::{Config as PgConfig, Pool};
+use ethos_gateway::analytics::PostgresAnalyticsSink;
 use ethos_gateway::auth;
 use ethos_gateway::config::GatewayConfig;
 use ethos_gateway::grpc::ConversationsGrpc;
@@ -107,6 +108,7 @@ async fn build_state_with_config(
     let quest_service: Arc<dyn QuestService> =
         Arc::new(PostgresQuestService::new(db.clone(), publisher.clone()));
     let guild_service: Arc<dyn GuildService> = Arc::new(PostgresGuildService::new(db.clone()));
+    let analytics = Arc::new(PostgresAnalyticsSink::new(db.clone()));
     let app_state = AppState::new(
         config.clone(),
         db,
@@ -115,6 +117,7 @@ async fn build_state_with_config(
         matrix,
         quest_service,
         guild_service,
+        analytics,
     );
     (app_state, room_service, test_publisher)
 }

@@ -4,6 +4,7 @@ use anyhow::Context;
 use axum::Router;
 use deadpool_postgres::Config as PgConfig;
 use ethos_gateway::{
+    analytics::PostgresAnalyticsSink,
     config::GatewayConfig,
     grpc,
     matrix::matrix_bridge_from_config,
@@ -60,6 +61,7 @@ async fn main() -> anyhow::Result<()> {
     let quest_service: Arc<dyn QuestService> =
         Arc::new(PostgresQuestService::new(db.clone(), publisher.clone()));
     let guild_service: Arc<dyn GuildService> = Arc::new(PostgresGuildService::new(db.clone()));
+    let analytics = Arc::new(PostgresAnalyticsSink::new(db.clone()));
 
     let matrix = matrix_bridge_from_config(&config).await?;
 
@@ -71,6 +73,7 @@ async fn main() -> anyhow::Result<()> {
         matrix,
         quest_service,
         guild_service,
+        analytics,
     );
     let http_router: Router = router(app_state.clone());
     let state = Arc::new(app_state);
