@@ -81,6 +81,10 @@ const MIGRATIONS: &[Migration] = &[
         "0013_add_visibility_to_pod_items.sql",
         include_str!("../migrations/0013_add_visibility_to_pod_items.sql"),
     ),
+    Migration::new(
+        "0015_create_quest_applications.sql",
+        include_str!("../migrations/0015_create_quest_applications.sql"),
+    ),
 ];
 
 fn migration_sections(sql: &'static str) -> (&'static str, Option<&'static str>) {

@@ -64,6 +64,19 @@ pub fn router(state: AppState) -> Router {
             "/api/quests/:id",
             get(get_quest).put(update_quest).delete(delete_quest),
         )
+        .route(
+            "/api/quests/:id/applications",
+            get(list_quest_applications).post(apply_to_quest),
+        )
+        .route(
+            "/api/quests/:id/applications/:application_id/approve",
+            post(approve_quest_application),
+        )
+        .route(
+            "/api/quests/:id/applications/:application_id/reject",
+            post(reject_quest_application),
+        )
+        .route("/api/quests/:id/stream", get(stream_quest))
         .route("/api/guilds", get(list_guilds).post(create_guild))
         .route(
             "/api/guilds/:id",

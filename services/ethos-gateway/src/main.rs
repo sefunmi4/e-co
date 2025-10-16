@@ -38,8 +38,6 @@ async fn main() -> anyhow::Result<()> {
         .create_pool(None, NoTls)
         .context("failed to create postgres pool")?;
     run_migrations(&db).await?;
-    let quest_service: Arc<dyn QuestService> = Arc::new(PostgresQuestService::new(db.clone()));
-    let guild_service: Arc<dyn GuildService> = Arc::new(PostgresGuildService::new(db.clone()));
     let publisher: Arc<dyn EventPublisher> = match &config.nats_url {
         Some(url) => match NatsPublisher::connect(url).await {
             Ok(client) => Arc::new(client),
@@ -50,6 +48,9 @@ async fn main() -> anyhow::Result<()> {
         },
         None => Arc::new(NoopPublisher),
     };
+    let quest_service: Arc<dyn QuestService> =
+        Arc::new(PostgresQuestService::new(db.clone(), publisher.clone()));
+    let guild_service: Arc<dyn GuildService> = Arc::new(PostgresGuildService::new(db.clone()));
 
     let matrix = matrix_bridge_from_config(&config).await?;
 

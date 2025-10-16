@@ -19,7 +19,7 @@ use ethos_gateway::router;
 use ethos_gateway::routes::{stream_conversation, StreamQuery};
 use ethos_gateway::services::{
     EventPublisher, GuildService, InMemoryRoomService, PostgresGuildService, PostgresQuestService,
-    QuestService, RoomService, TestPublisher,
+    QuestEvent, QuestService, RoomService, TestPublisher,
 };
 use ethos_gateway::state::AppState;
 use futures::StreamExt;
@@ -68,7 +68,7 @@ async fn reset_database(db: &Pool) {
         .expect("failed to acquire connection for test reset");
     client
         .batch_execute(
-            "TRUNCATE TABLE order_item_options, order_items, cart_item_options, cart_items, carts, artifact_variant_options, artifact_variants, memberships, quests, guilds, messages, conversations, pod_items, pods, artifacts, orders, users RESTART IDENTITY CASCADE;",
+            "TRUNCATE TABLE order_item_options, order_items, cart_item_options, cart_items, carts, artifact_variant_options, artifact_variants, memberships, quest_applications, quests, guilds, messages, conversations, pod_items, pods, artifacts, orders, users RESTART IDENTITY CASCADE;",
         )
         .await
         .expect("failed to reset database for tests");
@@ -101,11 +101,12 @@ async fn build_state_with_config(
         reset_database(&db).await;
     }
     let room_service = Arc::new(InMemoryRoomService::new());
-    let quest_service: Arc<dyn QuestService> = Arc::new(PostgresQuestService::new(db.clone()));
-    let guild_service: Arc<dyn GuildService> = Arc::new(PostgresGuildService::new(db.clone()));
     let test_publisher = Arc::new(TestPublisher::default());
     let matrix = Arc::new(NullMatrixBridge);
     let publisher: Arc<dyn EventPublisher> = test_publisher.clone();
+    let quest_service: Arc<dyn QuestService> =
+        Arc::new(PostgresQuestService::new(db.clone(), publisher.clone()));
+    let guild_service: Arc<dyn GuildService> = Arc::new(PostgresGuildService::new(db.clone()));
     let app_state = AppState::new(
         config.clone(),
         db,
@@ -425,6 +426,162 @@ async fn stream_conversation_returns_not_found_for_missing_conversation() {
     .await;
 
     assert_eq!(result.unwrap_err(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn quest_application_flow() {
+    let (_config, app_state, _room_service, publisher) = build_state().await;
+    let app = router(app_state.clone());
+
+    let owner_email = format!("owner+{}@example.com", Uuid::new_v4());
+    let owner_registration = register_user(&app, &owner_email, "password").await;
+    let owner_session = login(&app, &owner_email, "password").await;
+    let owner_token = owner_session["token"].as_str().unwrap();
+    let owner_id = owner_registration["user"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let quest_payload = json!({
+        "title": "Collect Stars",
+        "description": "Gather stardust from the nebula",
+    });
+    let quest_response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri("/api/quests")
+                .header("authorization", format!("Bearer {owner_token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(quest_payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(quest_response.status(), StatusCode::CREATED);
+    let quest_body = body::to_bytes(quest_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let quest_json: serde_json::Value = serde_json::from_slice(&quest_body).unwrap();
+    let quest_id = quest_json["id"].as_str().unwrap().to_string();
+
+    let mut receiver = app_state
+        .quest_service
+        .subscribe(&quest_id)
+        .await
+        .expect("quest subscription");
+
+    let applicant_email = format!("applicant+{}@example.com", Uuid::new_v4());
+    let applicant_registration = register_user(&app, &applicant_email, "password").await;
+    let applicant_session = login(&app, &applicant_email, "password").await;
+    let applicant_token = applicant_session["token"].as_str().unwrap();
+    let applicant_id = applicant_registration["user"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let apply_payload = json!({ "note": "Ready to help" });
+    let apply_response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri(format!("/api/quests/{quest_id}/applications"))
+                .header("authorization", format!("Bearer {applicant_token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(apply_payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(apply_response.status(), StatusCode::CREATED);
+    let apply_body = body::to_bytes(apply_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let application: serde_json::Value = serde_json::from_slice(&apply_body).unwrap();
+    assert_eq!(application["status"], "pending");
+    assert_eq!(
+        application["applicant_id"].as_str(),
+        Some(applicant_id.as_str())
+    );
+    let application_id = application["id"].as_str().unwrap().to_string();
+
+    let submitted_event = tokio::time::timeout(Duration::from_secs(1), receiver.recv())
+        .await
+        .expect("quest event timeout")
+        .expect("quest submission event");
+    assert_eq!(submitted_event.event, "application.submitted");
+    assert_eq!(
+        submitted_event.data["id"].as_str(),
+        Some(application_id.as_str())
+    );
+
+    let approve_payload = json!({ "note": "Welcome aboard" });
+    let approve_response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/quests/{quest_id}/applications/{application_id}/approve"
+                ))
+                .header("authorization", format!("Bearer {owner_token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(approve_payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(approve_response.status(), StatusCode::OK);
+    let approve_body = body::to_bytes(approve_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let approved: serde_json::Value = serde_json::from_slice(&approve_body).unwrap();
+    assert_eq!(approved["status"], "approved");
+    assert_eq!(approved["reviewed_by"].as_str(), Some(owner_id.as_str()));
+
+    let approved_event = tokio::time::timeout(Duration::from_secs(1), receiver.recv())
+        .await
+        .expect("quest event timeout")
+        .expect("quest approval event");
+    assert_eq!(approved_event.event, "application.approved");
+    assert_eq!(approved_event.data["status"].as_str(), Some("approved"));
+
+    let list_response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri(format!("/api/quests/{quest_id}/applications"))
+                .header("authorization", format!("Bearer {owner_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(list_response.status(), StatusCode::OK);
+    let list_body = body::to_bytes(list_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let list_json: serde_json::Value = serde_json::from_slice(&list_body).unwrap();
+    let applications = list_json.as_array().expect("application list");
+    assert_eq!(applications.len(), 1);
+    assert_eq!(applications[0]["status"], "approved");
+
+    let events = publisher.0.lock().await;
+    let quest_subject = format!("ethos.quests.{quest_id}");
+    let quest_events: Vec<QuestEvent> = events
+        .iter()
+        .filter(|(subject, _)| subject == &quest_subject)
+        .map(|(_, payload)| serde_json::from_slice::<QuestEvent>(payload).unwrap())
+        .collect();
+    assert!(quest_events
+        .iter()
+        .any(|event| event.event == "application.submitted"));
+    assert!(quest_events
+        .iter()
+        .any(|event| event.event == "application.approved"));
 }
 
 async fn next_presence_payload(body: &mut Body) -> serde_json::Value {
