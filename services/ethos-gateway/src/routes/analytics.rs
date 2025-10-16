@@ -5,10 +5,12 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use events::AnalyticsEventEnvelope;
 use serde::Deserialize;
 
 use crate::{
     analytics::{
+        events::persist_envelopes,
         queries::{
             aggregate_artifact_events, aggregate_pod_events, ArtifactEventBucket, Paginated,
             PodEventBucket,
@@ -42,6 +44,11 @@ pub struct AnalyticsResponse<T> {
     pub has_more: bool,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct IngestAnalyticsRequest {
+    pub events: Vec<AnalyticsEventEnvelope>,
+}
+
 pub async fn list_pod_analytics(
     State(state): State<Arc<AppState>>,
     Query(params): Query<AnalyticsQuery>,
@@ -62,6 +69,24 @@ pub async fn list_pod_analytics(
         page_size,
         has_more,
     }))
+}
+
+pub async fn ingest_analytics_events(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<IngestAnalyticsRequest>,
+) -> ApiResult<StatusCode> {
+    if payload.events.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "Missing events"));
+    }
+    persist_envelopes(&state.db, &payload.events)
+        .await
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to persist events",
+            )
+        })?;
+    Ok(StatusCode::ACCEPTED)
 }
 
 pub async fn list_artifact_analytics(

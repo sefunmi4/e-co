@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { SnapshotManifest, SnapshotTour } from "@backend/lib/pods";
+import { trackArtifactViewed, trackPodEntered } from "@events/web";
 import {
   attachLightingManifest,
   detachLightingManifest,
@@ -10,6 +11,8 @@ import {
 interface Props {
   slug: string;
   manifest: SnapshotManifest;
+  podId: string;
+  artifactId?: string | null;
   tour?: SnapshotTour | null;
 }
 
@@ -34,13 +37,17 @@ const exposeManifest = (manifest: SnapshotManifest, slug: string) => {
   scopedWindow.__ECO_ACTIVE_SCENE__ = { slug, manifest };
 };
 
-export default function SnapshotSceneHydrator({ slug, manifest, tour }: Props) {
+export default function SnapshotSceneHydrator({ slug, manifest, podId, artifactId, tour }: Props) {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     exposeManifest(manifest, slug);
     attachLightingManifest(manifest, slug);
     applyTour(tour ?? null, slug);
+    void trackPodEntered({ podId });
+    if (artifactId) {
+      void trackArtifactViewed({ artifactId, podId });
+    }
     const timer = window.setTimeout(() => {
       setHydrated(true);
     }, 0);
@@ -55,7 +62,7 @@ export default function SnapshotSceneHydrator({ slug, manifest, tour }: Props) {
       detachLightingManifest(slug);
       window.clearTimeout(timer);
     };
-  }, [manifest, slug, tour]);
+  }, [artifactId, manifest, podId, slug, tour]);
 
   if (!hydrated) {
     return (

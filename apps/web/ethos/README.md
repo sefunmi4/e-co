@@ -104,3 +104,10 @@ automatically via `build.rs` in the gateway crate.
 Vitest and the Rust integration suite provide coverage for the shared Zustand
 stores, chat UI, and the gateway’s Matrix/gRPC behaviour. Run both regularly to
 catch regressions before shipping.
+
+## Analytics instrumentation
+
+The storefront fixtures and browser experiences emit analytics events via the
+helpers defined in `shared/events`. Client interactions such as pod entry,
+artifact previews, checkout starts, and completed sales bubble up through the
+`POST /api/analytics/events` endpoint documented in `docs/api/analytics.md`.

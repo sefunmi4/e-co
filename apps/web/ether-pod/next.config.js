@@ -14,6 +14,7 @@ const nextConfig = {
       ...(config.resolve.alias || {}),
       '@frontend': path.resolve(__dirname, 'frontend'),
       '@backend': path.resolve(__dirname, 'backend'),
+      '@events': path.resolve(__dirname, '../../../shared/events'),
     };
     return config;
   },

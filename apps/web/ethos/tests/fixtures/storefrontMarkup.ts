@@ -1,3 +1,9 @@
+import {
+  EVENT_ARTIFACT_VIEWED,
+  EVENT_CHECKOUT_STARTED,
+  EVENT_POD_ENTERED,
+  EVENT_SALE_COMPLETED,
+} from "../../../../../shared/events/web";
 import type { DemoStorefrontData } from "./demoData";
 
 const formatCurrencyScript = `
@@ -9,6 +15,11 @@ const formatCurrencyScript = `
     }).format(valueCents / 100);
   };
 `;
+
+const POD_ENTERED_TYPE = JSON.stringify(EVENT_POD_ENTERED);
+const ARTIFACT_VIEWED_TYPE = JSON.stringify(EVENT_ARTIFACT_VIEWED);
+const CHECKOUT_STARTED_TYPE = JSON.stringify(EVENT_CHECKOUT_STARTED);
+const SALE_COMPLETED_TYPE = JSON.stringify(EVENT_SALE_COMPLETED);
 
 export const buildStorefrontMarkup = (data: DemoStorefrontData) => `<!DOCTYPE html>
 <html lang="en">
@@ -197,6 +208,83 @@ export const buildStorefrontMarkup = (data: DemoStorefrontData) => `<!DOCTYPE ht
         const successMessage = document.querySelector('[data-test="success-message"]');
         const successNote = document.querySelector('[data-test="success-note"]');
 
+        const analyticsEndpoint = '/api/analytics/events';
+        const dispatchAnalyticsEvent = (event) => {
+          try {
+            const payload = JSON.stringify({ events: [event] });
+            if (navigator && typeof navigator.sendBeacon === 'function') {
+              const blob = new Blob([payload], { type: 'application/json' });
+              if (navigator.sendBeacon(analyticsEndpoint, blob)) {
+                return;
+              }
+            }
+            if (typeof fetch === 'function') {
+              fetch(analyticsEndpoint, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: payload,
+                keepalive: true,
+              }).catch(() => {});
+            }
+          } catch (error) {
+            if (window.console && window.console.warn) {
+              window.console.warn('analytics dispatch failed', error);
+            }
+          }
+        };
+
+        const emitPodEntered = (podId) => {
+          if (!podId) {
+            return;
+          }
+          dispatchAnalyticsEvent({
+            type: ${POD_ENTERED_TYPE},
+            pod_id: podId,
+            occurred_at: new Date().toISOString(),
+          });
+        };
+
+        const emitArtifactViewed = (artifactId, podId) => {
+          if (!artifactId) {
+            return;
+          }
+          dispatchAnalyticsEvent({
+            type: ${ARTIFACT_VIEWED_TYPE},
+            artifact_id: artifactId,
+            pod_id: podId || null,
+            occurred_at: new Date().toISOString(),
+          });
+        };
+
+        const emitCheckoutStarted = (artifactId, podId) => {
+          if (!artifactId) {
+            return;
+          }
+          dispatchAnalyticsEvent({
+            type: ${CHECKOUT_STARTED_TYPE},
+            artifact_ids: [artifactId],
+            pod_id: podId || null,
+            occurred_at: new Date().toISOString(),
+          });
+        };
+
+        const emitSaleCompleted = (artifactId, podId) => {
+          if (!artifactId) {
+            return;
+          }
+          const orderId =
+            typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+              ? crypto.randomUUID()
+              : `order-${Date.now()}`;
+          dispatchAnalyticsEvent({
+            type: ${SALE_COMPLETED_TYPE},
+            order_id: orderId,
+            artifact_id: artifactId,
+            pod_id: podId || null,
+            occurred_at: new Date().toISOString(),
+          });
+        };
+
         const hideAll = () => {
           Object.values(views).forEach((view) => {
             view.setAttribute('hidden', 'true');
@@ -269,6 +357,7 @@ export const buildStorefrontMarkup = (data: DemoStorefrontData) => `<!DOCTYPE ht
               <button type="button" class="action-button" data-action="start-checkout">Start checkout</button>
             </div>
           `;
+          emitArtifactViewed(artifact.id, state.selectedPod ? state.selectedPod.id : null);
         };
 
         const renderCheckout = () => {
@@ -304,6 +393,7 @@ export const buildStorefrontMarkup = (data: DemoStorefrontData) => `<!DOCTYPE ht
               if (podId) {
                 renderArtifacts(podId);
                 showView('artifacts');
+                emitPodEntered(podId);
               }
               break;
             }
@@ -321,6 +411,12 @@ export const buildStorefrontMarkup = (data: DemoStorefrontData) => `<!DOCTYPE ht
             case 'start-checkout': {
               renderCheckout();
               showView('checkout');
+              if (state.selectedArtifact) {
+                emitCheckoutStarted(
+                  state.selectedArtifact.id,
+                  state.selectedPod ? state.selectedPod.id : null,
+                );
+              }
               break;
             }
             case 'back-to-artifacts': {
@@ -332,6 +428,12 @@ export const buildStorefrontMarkup = (data: DemoStorefrontData) => `<!DOCTYPE ht
               successMessage.textContent = state.checkout.successMessage;
               successNote.textContent = state.checkout.receiptNote;
               successPanel.classList.add('visible');
+              if (state.selectedArtifact) {
+                emitSaleCompleted(
+                  state.selectedArtifact.id,
+                  state.selectedPod ? state.selectedPod.id : null,
+                );
+              }
               break;
             }
           }
