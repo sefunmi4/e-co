@@ -1,0 +1,18 @@
+{
+  "fulfillments": [
+    {
+      "id": "printify-ful-1001",
+      "order_id": "printify-order-42",
+      "status": "in_production",
+      "tracking": [],
+      "estimated_delivery": null
+    },
+    {
+      "id": "printify-ful-1002",
+      "order_id": "printify-order-77",
+      "status": "shipped",
+      "tracking": ["9400111899223948173648"],
+      "estimated_delivery": "2024-07-14"
+    }
+  ]
+}

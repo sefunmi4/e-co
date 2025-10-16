@@ -1,0 +1,49 @@
+{
+  "data": [
+    {
+      "id": "printify-prod-hoodie",
+      "title": "Holographic Hoodie",
+      "description": "An iridescent hoodie woven with reactive fibers that shimmer under club lights.",
+      "tags": ["hoodie", "streetwear", "limited"],
+      "variants": [
+        {
+          "id": "printify-hoodie-xs",
+          "sku": "HOLO-HOOD-XS",
+          "price_cents": 5500,
+          "currency": "USD",
+          "options": [
+            { "name": "Size", "value": "XS" },
+            { "name": "Color", "value": "Nebula Black" }
+          ]
+        },
+        {
+          "id": "printify-hoodie-xl",
+          "sku": "HOLO-HOOD-XL",
+          "price_cents": 5800,
+          "currency": "USD",
+          "options": [
+            { "name": "Size", "value": "XL" },
+            { "name": "Color", "value": "Nebula Black" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "printify-prod-tote",
+      "title": "Synthwave Tote",
+      "description": "Heavy canvas tote with a heat-reactive gradient print.",
+      "tags": ["tote", "accessories"],
+      "variants": [
+        {
+          "id": "printify-tote-standard",
+          "sku": "SYNTH-TOTE-STD",
+          "price_cents": 2200,
+          "currency": "USD",
+          "options": [
+            { "name": "Size", "value": "Standard" }
+          ]
+        }
+      ]
+    }
+  ]
+}

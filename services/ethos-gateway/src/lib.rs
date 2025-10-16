@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod commerce;
 pub mod config;
 pub mod grpc;
 pub mod matrix;
