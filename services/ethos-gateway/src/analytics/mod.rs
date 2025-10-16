@@ -1,3 +1,4 @@
+pub mod events;
 pub mod queries;
 
 use chrono::{DateTime, Duration, Utc};

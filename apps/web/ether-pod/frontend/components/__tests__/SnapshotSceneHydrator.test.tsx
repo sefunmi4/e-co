@@ -5,6 +5,11 @@ import SnapshotSceneHydrator from '../SnapshotSceneHydrator';
 import type { SnapshotManifest, SnapshotTour } from '@backend/lib/pods';
 import { resetLightingStore } from '@frontend/state/lighting';
 
+vi.mock('@events/web', () => ({
+  trackPodEntered: vi.fn().mockResolvedValue(undefined),
+  trackArtifactViewed: vi.fn().mockResolvedValue(undefined),
+}));
+
 const manifest: SnapshotManifest = {
   nodes: [{ id: 'origin', position: [0, 0, 0] }],
 };
@@ -28,7 +33,14 @@ describe('SnapshotSceneHydrator', () => {
   });
 
   it('exposes the manifest and hydrates the scene', async () => {
-    render(<SnapshotSceneHydrator slug="aurora" manifest={manifest} />);
+    render(
+      <SnapshotSceneHydrator
+        slug="aurora"
+        manifest={manifest}
+        podId="pod-1"
+        artifactId="artifact-1"
+      />,
+    );
     expect(screen.getByTestId('scene-loading')).toBeInTheDocument();
 
     await waitFor(() => {
@@ -47,7 +59,15 @@ describe('SnapshotSceneHydrator', () => {
   });
 
   it('applies tours and dispatches tour events', async () => {
-    render(<SnapshotSceneHydrator slug="aurora" manifest={manifest} tour={tour} />);
+    render(
+      <SnapshotSceneHydrator
+        slug="aurora"
+        manifest={manifest}
+        podId="pod-1"
+        artifactId="artifact-1"
+        tour={tour}
+      />,
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId('scene-tour-json')).toBeInTheDocument();

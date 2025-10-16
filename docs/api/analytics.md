@@ -76,3 +76,46 @@ same as the pod endpoint.
   "has_more": false
 }
 ```
+
+## `POST /api/analytics/events`
+
+Ingests raw analytics events that reference pods, artifacts, or checkout flows. Events are
+validated against the schemas exported in `shared/events` and persisted to the
+`analytics_events` table for aggregation.
+
+### Request body
+
+```
+{
+  "events": [
+    {
+      "type": "pod_entered",
+      "pod_id": "a7fcb4fe-5f07-4e20-9af5-15e617c901c6",
+      "occurred_at": "2024-05-20T12:00:00Z"
+    },
+    {
+      "type": "artifact_viewed",
+      "artifact_id": "6b7ccf45-2a29-4c78-8b21-2d3f1ad97f77",
+      "pod_id": "a7fcb4fe-5f07-4e20-9af5-15e617c901c6"
+    },
+    {
+      "type": "checkout_started",
+      "artifact_ids": [
+        "6b7ccf45-2a29-4c78-8b21-2d3f1ad97f77"
+      ],
+      "pod_id": "a7fcb4fe-5f07-4e20-9af5-15e617c901c6"
+    },
+    {
+      "type": "sale_completed",
+      "order_id": "a4a70e58-9681-49b3-8a68-395e0ae7b2e5",
+      "artifact_id": "6b7ccf45-2a29-4c78-8b21-2d3f1ad97f77",
+      "pod_id": "a7fcb4fe-5f07-4e20-9af5-15e617c901c6"
+    }
+  ]
+}
+```
+
+### Response
+
+The endpoint returns `202 Accepted` once the events have been enqueued. Invalid payloads
+respond with `400 Bad Request`.

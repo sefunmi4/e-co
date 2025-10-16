@@ -20,11 +20,8 @@ export default async function PublishedPodPage({ params }: PageProps) {
     notFound();
   }
 
-  const {
-    snapshot: { pod },
-    manifest,
-    tour,
-  } = experience;
+  const { snapshot, manifest, tour } = experience;
+  const { pod, artifact_id: artifactId } = snapshot;
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950 text-indigo-100">
@@ -37,7 +34,13 @@ export default async function PublishedPodPage({ params }: PageProps) {
             <p className="text-sm text-indigo-200/80">{pod.description}</p>
           )}
         </header>
-        <SnapshotSceneHydrator slug={slug} manifest={manifest} tour={tour ?? undefined} />
+        <SnapshotSceneHydrator
+          slug={slug}
+          manifest={manifest}
+          podId={pod.id}
+          artifactId={artifactId ?? undefined}
+          tour={tour ?? undefined}
+        />
       </div>
     </div>
   );

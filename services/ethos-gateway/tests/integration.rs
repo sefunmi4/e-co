@@ -2019,7 +2019,7 @@ async fn analytics_endpoints_return_paginated_buckets() {
     let (_config, app_state, _room_service, _publisher) = build_state().await;
     let app = router(app_state.clone());
 
-    let mut client = app_state
+    let client = app_state
         .db
         .get()
         .await
@@ -2187,4 +2187,121 @@ async fn analytics_endpoints_return_paginated_buckets() {
         week_end,
         Utc.with_ymd_and_hms(2024, 5, 27, 0, 0, 0).unwrap()
     );
+}
+
+#[tokio::test]
+async fn analytics_ingest_endpoint_persists_events() {
+    let (_config, app_state, _room_service, _publisher) = build_state().await;
+    let app = router(app_state.clone());
+
+    let pod_id = Uuid::parse_str("10000000-0000-0000-0000-000000000001").unwrap();
+    let artifact_id = Uuid::parse_str("20000000-0000-0000-0000-000000000001").unwrap();
+    let occurred_at = "2024-05-20T12:34:56Z";
+
+    let payload = json!({
+        "events": [
+            {
+                "type": "pod_entered",
+                "pod_id": pod_id,
+                "occurred_at": occurred_at,
+            },
+            {
+                "type": "artifact_viewed",
+                "artifact_id": artifact_id,
+                "pod_id": pod_id,
+                "occurred_at": occurred_at,
+            }
+        ]
+    });
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri("/api/analytics/events")
+                .header("content-type", "application/json")
+                .body(Body::from(payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+
+    let client = app_state
+        .db
+        .get()
+        .await
+        .expect("acquire connection for analytics ingest test");
+
+    let rows = client
+        .query(
+            "SELECT event_type, pod_id, artifact_id, occurred_at FROM analytics_events ORDER BY occurred_at",
+            &[],
+        )
+        .await
+        .unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].get::<_, &str>("event_type"), "pod_entered");
+    assert_eq!(rows[0].get::<_, Option<Uuid>>("pod_id"), Some(pod_id));
+    assert_eq!(rows[0].get::<_, Option<Uuid>>("artifact_id"), None);
+    assert_eq!(rows[1].get::<_, &str>("event_type"), "artifact_viewed");
+    assert_eq!(rows[1].get::<_, Option<Uuid>>("pod_id"), Some(pod_id));
+    assert_eq!(
+        rows[1].get::<_, Option<Uuid>>("artifact_id"),
+        Some(artifact_id)
+    );
+
+    let response = app
+        .clone()
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri("/api/analytics/pods?window=day")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body_bytes = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let summary: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    let first_bucket = summary["data"]
+        .as_array()
+        .and_then(|items| items.first())
+        .unwrap();
+    let expected_pod_id = pod_id.to_string();
+    assert_eq!(
+        first_bucket["pod_id"].as_str(),
+        Some(expected_pod_id.as_str())
+    );
+    assert_eq!(first_bucket["total"].as_i64(), Some(2));
+
+    let response = app
+        .oneshot(
+            HttpRequest::builder()
+                .method("GET")
+                .uri("/api/analytics/artifacts?window=day")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body_bytes = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let summary: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    let first_bucket = summary["data"]
+        .as_array()
+        .and_then(|items| items.first())
+        .unwrap();
+    let expected_artifact_id = artifact_id.to_string();
+    assert_eq!(
+        first_bucket["artifact_id"].as_str(),
+        Some(expected_artifact_id.as_str())
+    );
+    assert_eq!(first_bucket["total"].as_i64(), Some(1));
 }

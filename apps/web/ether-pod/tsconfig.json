@@ -27,6 +27,9 @@
       ],
       "@backend/*": [
         "backend/*"
+      ],
+      "@events/*": [
+        "../../../shared/events/*"
       ]
     },
     "incremental": true,

@@ -8,7 +8,10 @@ use serde_json::Value;
 use tokio_postgres::{types::Json as PgJson, Row};
 use uuid::Uuid;
 
-use crate::services::artifacts::{self, CartDetail};
+use crate::{
+    analytics::events::record_sale_events,
+    services::artifacts::{self, CartDetail},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Order {
@@ -203,11 +206,17 @@ pub async fn checkout_order(
         .await
         .context("clear cart during checkout")?;
     let detail = load_order_detail(&transaction, order.id).await?;
+    let Some(detail) = detail else {
+        return Err(anyhow!("Failed to load order detail"));
+    };
+    record_sale_events(&transaction, &detail)
+        .await
+        .context("record sale events")?;
     transaction
         .commit()
         .await
         .context("commit checkout_order transaction")?;
-    detail.ok_or_else(|| anyhow!("Failed to load order detail"))
+    Ok(detail)
 }
 
 pub async fn update_order(

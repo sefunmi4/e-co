@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{self, Value};
 use uuid::Uuid;
 
@@ -35,14 +35,14 @@ pub struct UpdatePodRequest {
     pub description: Option<Option<String>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct AxisTriple {
     pub x: f64,
     pub y: f64,
     pub z: f64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct BuilderPrimitive {
     pub id: String,
     pub kind: String,
@@ -53,7 +53,7 @@ pub struct BuilderPrimitive {
     pub metadata: Option<Value>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct BuilderSnapshotPayload {
     pub version: i32,
     pub primitives: Vec<BuilderPrimitive>,
@@ -196,7 +196,12 @@ pub async fn hydrate_pod_snapshot(
         visibility,
     )
     .await
-    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to persist snapshot"))?;
+    .map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to persist snapshot",
+        )
+    })?;
     Ok((StatusCode::CREATED, Json(item)))
 }
 

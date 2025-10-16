@@ -55,6 +55,14 @@ npm test
 Vitest and Testing Library cover UI widgets and hooks. Add server-focused tests
 in `frontend/` or `backend/` as new capabilities land.
 
+## Analytics instrumentation
+
+Published pod pages emit analytics events whenever a viewer loads the scene or
+inspects the associated artifact. The helpers exported from
+`shared/events/web` handle beaconing `pod_entered` and `artifact_viewed`
+payloads to the gateway. See `frontend/components/SnapshotSceneHydrator.tsx`
+for the integration points.
+
 ## Open Graph images
 
 Published pods expose a pre-rendered Open Graph preview at

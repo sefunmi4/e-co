@@ -55,6 +55,7 @@ pub fn router(state: AppState) -> Router {
         .route("/auth/session", get(session))
         .route("/api/analytics/pods", get(list_pod_analytics))
         .route("/api/analytics/artifacts", get(list_artifact_analytics))
+        .route("/api/analytics/events", post(ingest_analytics_events))
         .route(
             "/api/conversations",
             get(list_conversations).post(create_conversation),
