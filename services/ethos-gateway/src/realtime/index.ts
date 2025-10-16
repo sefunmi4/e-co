@@ -2,6 +2,8 @@ import { createServer, type Server as HttpServer } from "http";
 import { fileURLToPath } from "url";
 import { Server, type Namespace, type ServerOptions, type Socket } from "socket.io";
 
+import { registerBridgeMiddleware } from "./bridge";
+
 export type RealtimeNamespace = "pods" | "guilds" | "rooms";
 
 export interface PresencePayload {
@@ -207,6 +209,10 @@ export const bootstrapRealtime = (
 
   NAMESPACES.forEach((namespaceName) => {
     const namespace = io.of(`/${namespaceName}`);
+    registerBridgeMiddleware(namespace, {
+      namespaceName,
+      logger: console,
+    });
     configureNamespace(namespace, namespaceName);
   });
 
