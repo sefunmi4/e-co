@@ -92,6 +92,7 @@ pub fn router(state: AppState) -> Router {
             "/api/pods/:id",
             get(get_pod).put(update_pod).delete(delete_pod),
         )
+        .route("/api/pods/:id/hydrate", post(hydrate_pod_snapshot))
         .route("/api/pods/:id/publish", post(publish_pod))
         .route(
             "/api/pods/:pod_id/items",

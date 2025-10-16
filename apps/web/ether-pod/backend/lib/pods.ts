@@ -1,5 +1,11 @@
 import { env } from '@e-co/config';
 import { error as logError } from '@eco/js-sdk/logger';
+import {
+  deserializeSnapshot,
+  serializeSnapshot,
+  type BuilderSnapshot,
+  type SerializedPrimitive,
+} from '../../src/builder';
 
 const resolveEcoApiBase = () => env.etherPod.ecoApiUrl;
 
@@ -32,6 +38,43 @@ export interface PodItem {
   created_at: string;
 }
 
+const BUILDER_SNAPSHOT_ITEM_TYPE = 'builder_snapshot';
+
+const parseBuilderSnapshot = (payload: unknown): BuilderSnapshot | null => {
+  if (!isRecord(payload)) {
+    return null;
+  }
+  const { version, primitives } = payload;
+  if (typeof version !== 'number' || !Array.isArray(primitives)) {
+    return null;
+  }
+  if (!primitives.every(isSerializedPrimitive)) {
+    return null;
+  }
+  const snapshot: BuilderSnapshot = {
+    version,
+    primitives: (primitives as SerializedPrimitive[]).map((primitive) => ({
+      ...primitive,
+      metadata: primitive.metadata ? { ...primitive.metadata } : undefined,
+    })),
+  };
+  try {
+    const normalised = serializeSnapshot(deserializeSnapshot(snapshot));
+    return normalised;
+  } catch (error) {
+    logError('Failed to normalise builder snapshot', error);
+    return null;
+  }
+};
+
+const buildSnapshotPayload = (snapshot: BuilderSnapshot): BuilderSnapshot => {
+  const primitives = serializeSnapshot(snapshot.primitives);
+  return {
+    version: primitives.version,
+    primitives: primitives.primitives,
+  };
+};
+
 export type SnapshotManifest = Record<string, unknown>;
 export type SnapshotTour = Record<string, unknown>;
 
@@ -55,6 +98,17 @@ interface TourResolutionResult {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isVector = (value: unknown): value is { x: number; y: number; z: number } =>
+  isRecord(value) && ['x', 'y', 'z'].every((axis) => typeof value[axis] === 'number');
+
+const isSerializedPrimitive = (value: unknown): value is SerializedPrimitive =>
+  isRecord(value) &&
+  typeof value.id === 'string' &&
+  typeof value.kind === 'string' &&
+  isVector(value.position) &&
+  isVector(value.rotation) &&
+  isVector(value.scale);
 
 const sanitizeSlug = (value: string) =>
   value
@@ -249,5 +303,51 @@ export const fetchSnapshotExperience = async (
   const { manifest, manifestUrl } = await resolveManifest(snapshot, slug, indexerBase);
   const { tour, tourUrl } = await resolveTour(snapshot, slug, indexerBase);
   return { snapshot, manifest, manifestUrl, tour: tour ?? null, tourUrl: tourUrl ?? null };
+};
+
+export const extractBuilderSnapshot = (snapshot: PodSnapshot): BuilderSnapshot | null => {
+  const candidate = snapshot.items.find(
+    (item) => item.item_type === BUILDER_SNAPSHOT_ITEM_TYPE,
+  );
+  if (!candidate) {
+    return null;
+  }
+  return parseBuilderSnapshot(candidate.item_data);
+};
+
+interface PersistBuilderSnapshotOptions {
+  podId: string;
+  snapshot: BuilderSnapshot;
+  token?: string;
+  visibility?: string;
+}
+
+export const persistBuilderSnapshot = async ({
+  podId,
+  snapshot,
+  token,
+  visibility = 'public',
+}: PersistBuilderSnapshotOptions) => {
+  const apiBase = resolveEcoApiBase();
+  const url = new URL(`/api/pods/${encodeURIComponent(podId)}/hydrate`, apiBase);
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  const payload = buildSnapshotPayload(snapshot);
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      snapshot: payload,
+      visibility,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to persist builder snapshot (status ${response.status})`);
+  }
+  return (await response.json()) as PodItem;
 };
 
