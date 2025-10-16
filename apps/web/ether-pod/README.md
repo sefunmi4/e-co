@@ -54,3 +54,11 @@ npm test
 
 Vitest and Testing Library cover UI widgets and hooks. Add server-focused tests
 in `frontend/` or `backend/` as new capabilities land.
+
+## Open Graph images
+
+Published pods expose a pre-rendered Open Graph preview at
+`/api/og/p/[slug]`. The handler composes a marketing card using the pod
+snapshot title and hero camera angle, and caches the generated image for
+24 hours (`max-age=86400`) with a 7 day CDN `s-maxage` so repeat requests
+stay fast.
