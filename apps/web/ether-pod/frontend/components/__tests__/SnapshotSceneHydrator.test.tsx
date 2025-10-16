@@ -3,6 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SnapshotSceneHydrator from '../SnapshotSceneHydrator';
 import type { SnapshotManifest, SnapshotTour } from '@backend/lib/pods';
+import { resetLightingStore } from '@frontend/state/lighting';
 
 const manifest: SnapshotManifest = {
   nodes: [{ id: 'origin', position: [0, 0, 0] }],
@@ -19,6 +20,7 @@ describe('SnapshotSceneHydrator', () => {
 
   beforeEach(() => {
     dispatchEventSpy.mockClear();
+    resetLightingStore();
   });
 
   afterEach(() => {
@@ -59,4 +61,3 @@ describe('SnapshotSceneHydrator', () => {
     expect(event.detail.slug).toBe('aurora');
   });
 });
-

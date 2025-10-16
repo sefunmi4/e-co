@@ -2,6 +2,7 @@
 
 import type { ComponentType } from 'react';
 import { useEffect, useState } from 'react';
+import BuilderHud from '../components/BuilderHud';
 import CommandPalette from '../components/CommandPalette';
 import Desktop from '../components/Desktop';
 import EnvManager from '../components/EnvManager';
@@ -25,6 +26,7 @@ export default function HomePage() {
       <ForegroundOverlay />
       <Desktop />
       <EnvManager onWorldChange={setWorld} />
+      <BuilderHud />
       <CommandPalette />
       <ModelDashboard />
     </div>

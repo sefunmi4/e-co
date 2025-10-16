@@ -1,7 +1,11 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import type { SnapshotManifest, SnapshotTour } from '@backend/lib/pods';
+import { useEffect, useState } from "react";
+import type { SnapshotManifest, SnapshotTour } from "@backend/lib/pods";
+import {
+  attachLightingManifest,
+  detachLightingManifest,
+} from "@frontend/state/lighting";
 
 interface Props {
   slug: string;
@@ -18,7 +22,7 @@ const applyTour = (tour: SnapshotTour | null | undefined, slug: string) => {
   const scopedWindow = window as WindowWithEco;
   scopedWindow.__ECO_ACTIVE_TOUR__ = tour ?? null;
   if (tour) {
-    const event = new CustomEvent('eco:tour:apply', {
+    const event = new CustomEvent("eco:tour:apply", {
       detail: { slug, tour },
     });
     window.dispatchEvent(event);
@@ -35,6 +39,7 @@ export default function SnapshotSceneHydrator({ slug, manifest, tour }: Props) {
 
   useEffect(() => {
     exposeManifest(manifest, slug);
+    attachLightingManifest(manifest, slug);
     applyTour(tour ?? null, slug);
     const timer = window.setTimeout(() => {
       setHydrated(true);
@@ -47,6 +52,7 @@ export default function SnapshotSceneHydrator({ slug, manifest, tour }: Props) {
       if (scopedWindow.__ECO_ACTIVE_TOUR__) {
         scopedWindow.__ECO_ACTIVE_TOUR__ = null;
       }
+      detachLightingManifest(slug);
       window.clearTimeout(timer);
     };
   }, [manifest, slug, tour]);
@@ -92,4 +98,3 @@ export default function SnapshotSceneHydrator({ slug, manifest, tour }: Props) {
     </div>
   );
 }
-
