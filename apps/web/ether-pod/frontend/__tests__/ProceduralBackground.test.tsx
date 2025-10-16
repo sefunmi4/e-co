@@ -8,6 +8,11 @@ import {
   resetFrequencyStore,
   setFrequency,
 } from '@frontend/state/frequency';
+import { resetFrameMetrics } from '@frontend/state/frameMetrics';
+
+const fiberMocks = vi.hoisted(() => ({
+  scene: { background: null as unknown, fog: null as unknown },
+}));
 
 vi.mock('@react-three/fiber', () => ({
   Canvas: ({ children, ...props }: { children: React.ReactNode }) => (
@@ -15,6 +20,10 @@ vi.mock('@react-three/fiber', () => ({
       {children}
     </div>
   ),
+  useFrame: (callback: (state: unknown, delta: number) => void) => {
+    callback({}, 1 / 60);
+  },
+  useThree: () => fiberMocks.scene,
 }));
 
 vi.mock('@react-three/drei', () => ({
@@ -34,9 +43,29 @@ vi.mock('three', () => {
     computeVertexNormals = vi.fn();
   }
 
+  class MockColor {
+    value: string;
+    constructor(value: string) {
+      this.value = value;
+    }
+  }
+
+  class MockFog {
+    color: string;
+    near: number;
+    far: number;
+    constructor(color: string, near: number, far: number) {
+      this.color = color;
+      this.near = near;
+      this.far = far;
+    }
+  }
+
   return {
     PlaneGeometry: MockPlaneGeometry,
     BufferAttribute: MockBufferAttribute,
+    Color: MockColor,
+    Fog: MockFog,
   };
 });
 
@@ -45,6 +74,12 @@ const frequencyMocks = vi.hoisted(() => ({
 }));
 
 const { ensureFrequencySubscription } = frequencyMocks;
+
+vi.mock('@backend/lib/frequency', () => ({
+  __esModule: true,
+  ensureFrequencySubscription: frequencyMocks.ensureFrequencySubscription,
+  default: () => DEFAULT_FREQUENCY,
+}));
 
 vi.mock('simplex-noise', () => {
   return {
@@ -57,15 +92,10 @@ vi.mock('simplex-noise', () => {
   };
 });
 
-vi.mock('@backend/lib/frequency', () => ({
-  __esModule: true,
-  ensureFrequencySubscription: frequencyMocks.ensureFrequencySubscription,
-  default: () => DEFAULT_FREQUENCY,
-}));
-
 describe('ProceduralBackground', () => {
   beforeEach(() => {
     resetFrequencyStore();
+    resetFrameMetrics();
     ensureFrequencySubscription.mockClear();
   });
 
@@ -83,6 +113,7 @@ describe('ProceduralBackground', () => {
 
     await waitFor(() => {
       expect(canvas.getAttribute('data-frequency')).toBe('0.31');
+      expect(canvas.getAttribute('data-lighting')).toBeDefined();
     });
 
     expect(ensureFrequencySubscription).toHaveBeenCalledWith(DEFAULT_JOB_ID);
