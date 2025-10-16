@@ -82,6 +82,10 @@ const MIGRATIONS: &[Migration] = &[
         include_str!("../migrations/0013_add_visibility_to_pod_items.sql"),
     ),
     Migration::new(
+        "0014_create_artifact_variants_and_cart.sql",
+        include_str!("../migrations/0014_create_artifact_variants_and_cart.sql"),
+    ),
+    Migration::new(
         "0015_create_quest_applications.sql",
         include_str!("../migrations/0015_create_quest_applications.sql"),
     ),
