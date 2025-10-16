@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
+use quest_status::PUBLIC_QUEST_STATUSES;
 use serde::Deserialize;
 use serde_json::Value;
 use tantivy::schema::{Facet, FacetOptions, Field, Schema, STORED, STRING, TEXT};
@@ -228,6 +229,17 @@ impl IngestionService {
         }
     }
 
+    fn quest_visibility(status: &str) -> &'static str {
+        if PUBLIC_QUEST_STATUSES
+            .iter()
+            .any(|value| status.eq_ignore_ascii_case(value))
+        {
+            "public"
+        } else {
+            "private"
+        }
+    }
+
     async fn refresh_index(&self) -> Result<usize> {
         let entities = self.load_all_entities().await?;
         let mut writer = self.writer.lock().await;
@@ -375,11 +387,7 @@ impl IngestionService {
             let mut tags = vec![status.clone()];
             normalize_tags(&mut tags);
             dedup(&mut tags);
-            let visibility = if status.eq_ignore_ascii_case("published") {
-                "public".to_string()
-            } else {
-                "private".to_string()
-            };
+            let visibility = Self::quest_visibility(&status).to_string();
             let mut fragments = vec![title.clone(), status.clone()];
             if let Some(description) = &description {
                 fragments.push(description.clone());
@@ -561,5 +569,35 @@ mod tests {
             })
             .collect();
         assert_eq!(stored_tags.len(), 2);
+    }
+
+    #[test]
+    fn quest_with_approved_status_is_public() {
+        let schema = SearchSchema::build();
+        let visibility = IngestionService::quest_visibility("approved");
+        assert_eq!(visibility, "public");
+
+        let entity = SearchEntity {
+            doc_id: "quest:123".to_string(),
+            entity_id: "123".to_string(),
+            entity_type: "quest".to_string(),
+            owner_id: Some("creator".to_string()),
+            title: Some("Quest Title".to_string()),
+            description: Some("Quest description".to_string()),
+            visibility: visibility.to_string(),
+            tags: vec!["approved".to_string()],
+            status: Some("approved".to_string()),
+            kind: Some("quest".to_string()),
+            content_fragments: vec!["approved".to_string()],
+        };
+
+        let document = entity.to_document(&schema);
+        let visibility_facets: Vec<_> = document.get_all(schema.visibility_facet).collect();
+        assert_eq!(visibility_facets.len(), 1);
+        let facet_path = match &visibility_facets[0] {
+            TantivyValue::Facet(facet) => facet.to_path_string(),
+            other => panic!("expected facet value, got {other:?}"),
+        };
+        assert_eq!(facet_path, "/visibility/public");
     }
 }

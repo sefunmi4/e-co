@@ -17,6 +17,7 @@ tokio-postgres = { version = "0.7", features = ["with-serde_json-1", "with-uuid-
 tracing = "0.1"
 tracing-subscriber = "0.3"
 uuid = { version = "1", features = ["serde", "v4"] }
+quest-status = { path = "../../shared/quest-status" }
 
 [patch.crates-io]
 zstd-safe = { path = "../../vendor/zstd-safe" }

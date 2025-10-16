@@ -28,7 +28,7 @@ impl PostgresQuestService {
     }
 
     fn public_statuses() -> Vec<String> {
-        vec!["published".to_string(), "approved".to_string()]
+        quest_status::public_statuses()
     }
 
     fn row_to_value(row: &Row) -> anyhow::Result<Value> {
