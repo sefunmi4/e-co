@@ -34,6 +34,9 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm ci --workspace ${{ matrix.workspace }}
+      - name: Validate Ether Pod assets
+        if: ${{ matrix.workspace == 'apps/web/ether-pod' }}
+        run: npm run check:assets -w apps/web/ether-pod
       - name: Lint workspace
         if: ${{ matrix.lint_command != '' }}
         run: ${{ matrix.lint_command }}
