@@ -6,11 +6,15 @@ use axum::{
     Json,
 };
 use serde::Deserialize;
+use serde_json::{self, Value};
 use uuid::Uuid;
 
 use crate::{
     auth::AuthSession,
-    services::pods::{self, Pod, PodChanges, PodSnapshot},
+    services::{
+        pod_items::{self, PodItem, DEFAULT_VISIBILITY},
+        pods::{self, Pod, PodChanges, PodSnapshot},
+    },
     state::AppState,
 };
 
@@ -29,6 +33,37 @@ pub struct UpdatePodRequest {
     pub title: Option<String>,
     #[serde(default)]
     pub description: Option<Option<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AxisTriple {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BuilderPrimitive {
+    pub id: String,
+    pub kind: String,
+    pub position: AxisTriple,
+    pub rotation: AxisTriple,
+    pub scale: AxisTriple,
+    #[serde(default)]
+    pub metadata: Option<Value>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BuilderSnapshotPayload {
+    pub version: i32,
+    pub primitives: Vec<BuilderPrimitive>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct HydrateSnapshotRequest {
+    pub snapshot: BuilderSnapshotPayload,
+    #[serde(default)]
+    pub visibility: Option<String>,
 }
 
 pub async fn list_pods(
@@ -118,6 +153,51 @@ pub async fn delete_pod(
     } else {
         Err((StatusCode::NOT_FOUND, "Pod not found"))
     }
+}
+
+pub async fn hydrate_pod_snapshot(
+    auth: AuthSession,
+    State(state): State<Arc<AppState>>,
+    Path(pod_id): Path<String>,
+    Json(body): Json<HydrateSnapshotRequest>,
+) -> ApiResult<(StatusCode, Json<PodItem>)> {
+    let owner_id = parse_uuid(&auth.user_id)?;
+    let pod_id = parse_uuid(&pod_id)?;
+    let pod = pods::get_pod(&state.db, pod_id)
+        .await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to load pod"))?;
+    let Some(pod) = pod else {
+        return Err((StatusCode::NOT_FOUND, "Pod not found"));
+    };
+    if pod.owner_id != owner_id {
+        return Err((StatusCode::NOT_FOUND, "Pod not found"));
+    }
+    if body.snapshot.version <= 0 {
+        return Err((StatusCode::BAD_REQUEST, "Invalid builder snapshot"));
+    }
+    let visibility = body
+        .visibility
+        .clone()
+        .unwrap_or_else(|| DEFAULT_VISIBILITY.to_string());
+    let visibility = if visibility.trim().is_empty() {
+        DEFAULT_VISIBILITY.to_string()
+    } else {
+        visibility
+    };
+    let item_data = serde_json::to_value(body.snapshot)
+        .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid builder snapshot"))?;
+    let item = pod_items::create_pod_item(
+        &state.db,
+        pod_id,
+        None,
+        "builder_snapshot".to_string(),
+        item_data,
+        None,
+        visibility,
+    )
+    .await
+    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to persist snapshot"))?;
+    Ok((StatusCode::CREATED, Json(item)))
 }
 
 pub async fn publish_pod(
