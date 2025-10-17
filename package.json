@@ -11,7 +11,8 @@
     "lint": "npm run lint -w packages/config && npm run lint -w apps/web/ethos/frontend && npm run lint -w apps/web/ether-pod",
     "test": "npm run build -w packages/config && npm run build -w sdks/js && npm run test -w sdks/js && npm run test -w apps/web/ethos/frontend && npm run test -w apps/web/ether-pod",
     "build": "npm run build -w packages/config && npm run build -w sdks/js && npm run build -w apps/web/ethos/frontend && npm run build -w apps/web/ether-pod",
-    "seed:demo-data": "cargo run -p ethos-gateway --bin ethos-gateway -- seed-demo-data"
+    "seed:demo-data": "cargo run -p ethos-gateway --bin ethos-gateway -- seed-demo-data",
+    "dev:ether-net": "npm --workspace apps/desktop/ether-net run tauri:dev"
   },
   "devDependencies": {
     "eslint": "^8.56.0",

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/v1/schema.json",
+  "package": {
+    "productName": "Ether Net",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "fs": {
+        "scope": ["$HOME/.ether/**"]
+      },
+      "shell": {
+        "all": false
+      }
+    },
+    "windows": [
+      {
+        "label": "main",
+        "title": "Ether Net",
+        "width": 1280,
+        "height": 720
+      }
+    ]
+  }
+}
