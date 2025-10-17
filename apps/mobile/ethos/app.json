@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Ethos Mobile",
+    "slug": "ethos-mobile",
+    "scheme": "ethos",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0f172a"
+      }
+    },
+    "plugins": [
+      "@react-native-async-storage/async-storage"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "dummy-project-id"
+      }
+    }
+  }
+}
