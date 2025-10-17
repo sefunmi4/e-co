@@ -15,9 +15,7 @@
         "backgroundColor": "#0f172a"
       }
     },
-    "plugins": [
-      "@react-native-async-storage/async-storage"
-    ],
+    "plugins": [],
     "extra": {
       "eas": {
         "projectId": "dummy-project-id"
