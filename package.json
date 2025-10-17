@@ -4,6 +4,7 @@
     "packages/config",
     "apps/web/ethos/frontend",
     "apps/web/ether-pod",
+    "apps/mobile/ethos",
     "sdks/js"
   ],
   "scripts": {
