@@ -30,10 +30,12 @@ const QuestListItem: React.FC<Props> = ({ quest, onPress }) => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   headerRow: {
     flexDirection: 'row',
@@ -42,15 +44,15 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   title: {
-    color: '#f8fafc',
+    color: '#0f172a',
     fontSize: 18,
     fontWeight: '700',
     flex: 1,
     marginRight: 12,
   },
   pill: {
-    color: '#38bdf8',
-    borderColor: '#38bdf8',
+    color: '#2563eb',
+    borderColor: '#2563eb',
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 10,
@@ -59,7 +61,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   description: {
-    color: '#cbd5f5',
+    color: '#475569',
     fontSize: 14,
     lineHeight: 20,
     marginBottom: 12,
@@ -70,7 +72,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   metaText: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 12,
   },
 });

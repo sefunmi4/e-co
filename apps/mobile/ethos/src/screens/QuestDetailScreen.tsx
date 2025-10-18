@@ -43,34 +43,36 @@ const QuestDetailScreen: React.FC<NativeStackScreenProps<RootStackParamList, 'Qu
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#f8fafc',
   },
   content: {
     padding: 24,
     gap: 16,
   },
   title: {
-    color: '#f8fafc',
+    color: '#0f172a',
     fontSize: 28,
     fontWeight: '700',
   },
   meta: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 14,
   },
   section: {
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 16,
     gap: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   sectionTitle: {
-    color: '#e2e8f0',
+    color: '#0f172a',
     fontSize: 16,
     fontWeight: '600',
   },
   body: {
-    color: '#cbd5f5',
+    color: '#475569',
     fontSize: 15,
     lineHeight: 22,
   },
@@ -79,10 +81,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   statLabel: {
-    color: '#94a3b8',
+    color: '#64748b',
   },
   statValue: {
-    color: '#f8fafc',
+    color: '#0f172a',
     fontWeight: '600',
   },
 });

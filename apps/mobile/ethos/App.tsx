@@ -8,7 +8,7 @@ const App: React.FC = () => {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
         <AppNavigator />
       </AuthProvider>
     </GestureHandlerRootView>

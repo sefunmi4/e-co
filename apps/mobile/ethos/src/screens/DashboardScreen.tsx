@@ -120,7 +120,7 @@ const DashboardScreen: React.FC<NativeStackScreenProps<RootStackParamList, 'Dash
           </View>
         }
         ListEmptyComponent={!loading ? listEmptyComponent : null}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#38bdf8" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2563eb" />}
         showsVerticalScrollIndicator={false}
       />
     </SafeAreaView>
@@ -130,7 +130,7 @@ const DashboardScreen: React.FC<NativeStackScreenProps<RootStackParamList, 'Dash
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#f8fafc',
   },
   contentContainer: {
     padding: 20,
@@ -142,24 +142,24 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   greeting: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 14,
   },
   name: {
-    color: '#f8fafc',
+    color: '#0f172a',
     fontSize: 24,
     fontWeight: '700',
     marginTop: 4,
   },
   settingsButton: {
-    borderColor: '#38bdf8',
+    borderColor: '#2563eb',
     borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 999,
   },
   settingsButtonText: {
-    color: '#38bdf8',
+    color: '#2563eb',
     fontWeight: '600',
   },
   summaryRow: {
@@ -169,36 +169,38 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   summaryTitle: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 12,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
   summaryValue: {
-    color: '#f8fafc',
+    color: '#0f172a',
     fontSize: 20,
     fontWeight: '700',
     marginTop: 8,
   },
   errorBanner: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    borderColor: 'rgba(239, 68, 68, 0.3)',
+    backgroundColor: '#fee2e2',
+    borderColor: '#fecaca',
     borderWidth: 1,
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
   },
   errorText: {
-    color: '#fecaca',
+    color: '#b91c1c',
     marginBottom: 8,
   },
   errorRetry: {
-    color: '#f87171',
+    color: '#dc2626',
     fontWeight: '600',
   },
   emptyState: {
@@ -207,12 +209,12 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   emptyStateTitle: {
-    color: '#f8fafc',
+    color: '#0f172a',
     fontSize: 20,
     fontWeight: '700',
   },
   emptyStateBody: {
-    color: '#94a3b8',
+    color: '#64748b',
     textAlign: 'center',
     paddingHorizontal: 20,
     lineHeight: 20,
