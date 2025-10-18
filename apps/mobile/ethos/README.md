@@ -13,7 +13,7 @@ A React Native implementation of the Ethos questing experience that runs on Andr
 2. Set the Ethos gateway base URL so the mobile app can talk to your backend. Create `apps/mobile/ethos/.env` (or export the variable in your shell) with:
 
    ```bash
-   EXPO_PUBLIC_GATEWAY_URL=http://localhost:4455
+   EXPO_PUBLIC_GATEWAY_URL=http://localhost:8080
    ```
 
    Update the value if your gateway lives elsewhere.
