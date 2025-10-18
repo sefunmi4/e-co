@@ -89,7 +89,7 @@ const LoginScreen: React.FC = () => {
 
           <View style={styles.dividerContainer}>
             <View style={styles.divider} />
-            <Text style={styles.dividerLabel}>Or continue with</Text>
+            <Text style={styles.dividerLabel}>--or--</Text>
             <View style={styles.divider} />
           </View>
 
@@ -99,28 +99,28 @@ const LoginScreen: React.FC = () => {
               onPress={() => handleSocialSignIn('Google')}
               disabled={busy}
             >
-              <Text style={styles.socialButtonText}>Google</Text>
+              <Text style={styles.socialButtonText}>Continue with Google</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.socialButton}
               onPress={() => handleSocialSignIn('Apple')}
               disabled={busy}
             >
-              <Text style={styles.socialButtonText}>Apple</Text>
+              <Text style={styles.socialButtonText}>Continue with Apple</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.socialButton}
               onPress={() => handleSocialSignIn('GitHub')}
               disabled={busy}
             >
-              <Text style={styles.socialButtonText}>GitHub</Text>
+              <Text style={styles.socialButtonText}>Continue with GitHub</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.socialButton}
               onPress={() => handleSocialSignIn('Facebook / Instagram')}
               disabled={busy}
             >
-              <Text style={styles.socialButtonText}>Facebook / Instagram</Text>
+              <Text style={styles.socialButtonText}>Continue with Facebook / Instagram</Text>
             </TouchableOpacity>
           </View>
         </View>
