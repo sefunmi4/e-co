@@ -13,7 +13,10 @@
     "test": "npm run build -w packages/config && npm run build -w sdks/js && npm run test -w sdks/js && npm run test -w apps/web/ethos/frontend && npm run test -w apps/web/ether-pod",
     "build": "npm run build -w packages/config && npm run build -w sdks/js && npm run build -w apps/web/ethos/frontend && npm run build -w apps/web/ether-pod",
     "seed:demo-data": "cargo run -p ethos-gateway --bin ethos-gateway -- seed-demo-data",
-    "dev:ether-net": "npm --workspace apps/desktop/ether-net run tauri:dev"
+    "dev:ether-net": "npm --workspace apps/desktop/ether-net run tauri:dev",
+    "mobile:install:base": "npm --prefix apps/mobile/ethos install --save-exact expo@~50.0.0 react@19.2.0 react-native@0.82.0",
+    "mobile:install:native": "npm --prefix apps/mobile/ethos install @react-native-async-storage/async-storage@~1.21.0 expo-linear-gradient@~12.7.2 --legacy-peer-deps",
+    "mobile:start": "cd apps/mobile/ethos && npx expo start -c"
   },
   "devDependencies": {
     "eslint": "^8.56.0",

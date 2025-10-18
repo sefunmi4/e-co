@@ -1,7 +1,7 @@
 const fs = require('fs');
 const Module = require('module');
 const path = require('path');
-const { getDefaultConfig } = require('expo/metro-config');
+const { getDefaultConfig } = require('@expo/metro-config');
 
 const projectRoot = __dirname;
 const workspaceRoot = path.resolve(projectRoot, '../../..');
@@ -21,36 +21,62 @@ if (!fs.existsSync(projectReactNativePackageJson) && !fs.existsSync(workspaceRea
   );
 }
 
-function loadConfig() {
-  if (fs.existsSync(projectReactNativePackageJson) || !fs.existsSync(workspaceReactNativePackageJson)) {
-    return getDefaultConfig(projectRoot);
+const originalResolveFilename = Module._resolveFilename;
+let shouldUseWorkspaceReactNative = false;
+
+Module._resolveFilename = function patchedResolveFilename(request, parent, isMain, options) {
+  if (request === 'metro/src/stores/FileStore') {
+    return originalResolveFilename.call(this, 'metro/private/stores/FileStore', parent, isMain, options);
   }
 
-  const originalResolveFilename = Module._resolveFilename;
+  if (request === 'metro-cache/src/stores/FileStore') {
+    return originalResolveFilename.call(this, 'metro-cache/private/stores/FileStore', parent, isMain, options);
+  }
 
-  Module._resolveFilename = function patchedResolveFilename(request, parent, isMain, options) {
-    if (request === 'react-native/package.json') {
-      return workspaceReactNativePackageJson;
-    }
+  if (request === 'metro/src/DeltaBundler/Serializers/sourceMapString') {
+    return originalResolveFilename.call(
+      this,
+      'metro/private/DeltaBundler/Serializers/sourceMapString',
+      parent,
+      isMain,
+      options,
+    );
+  }
 
-    return originalResolveFilename.call(this, request, parent, isMain, options);
-  };
+  if (request === 'metro/src/lib/TerminalReporter') {
+    return originalResolveFilename.call(this, 'metro/private/lib/TerminalReporter', parent, isMain, options);
+  }
 
+  if (shouldUseWorkspaceReactNative && request === 'react-native/package.json') {
+    return workspaceReactNativePackageJson;
+  }
+
+  return originalResolveFilename.call(this, request, parent, isMain, options);
+};
+
+async function loadConfig(useWorkspaceReactNative) {
+  shouldUseWorkspaceReactNative = useWorkspaceReactNative;
   try {
-    return getDefaultConfig(projectRoot);
+    return await getDefaultConfig(projectRoot);
   } finally {
-    Module._resolveFilename = originalResolveFilename;
+    shouldUseWorkspaceReactNative = false;
   }
 }
 
-const config = loadConfig();
+module.exports = (async () => {
+  const hasProjectReactNative = fs.existsSync(projectReactNativePackageJson);
+  const hasWorkspaceReactNative = fs.existsSync(workspaceReactNativePackageJson);
+  const useWorkspaceReactNative = !hasProjectReactNative && hasWorkspaceReactNative;
 
-config.watchFolders = [workspaceRoot];
-config.resolver.nodeModulesPaths = [
-  path.resolve(projectRoot, 'node_modules'),
-  path.resolve(workspaceRoot, 'node_modules'),
-];
+  const config = await loadConfig(useWorkspaceReactNative);
 
-config.resolver.disableHierarchicalLookup = true;
+  config.watchFolders = [workspaceRoot];
+  config.resolver.nodeModulesPaths = [
+    path.resolve(projectRoot, 'node_modules'),
+    path.resolve(workspaceRoot, 'node_modules'),
+  ];
 
-module.exports = config;
+  config.resolver.disableHierarchicalLookup = true;
+
+  return config;
+})();

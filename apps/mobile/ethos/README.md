@@ -26,6 +26,15 @@ A React Native implementation of the Ethos questing experience that runs on Andr
 
 4. Open the project on a device or emulator using the Expo Go client (`npm run android -w apps/mobile/ethos` or `npm run ios -w apps/mobile/ethos`).
 
+### Run
+
+```
+npm install        # inside apps/mobile/ethos (isolated)
+npx expo start -c
+```
+
+> Do NOT use `npm run start -w apps/mobile/ethos` from the repo root; it re-enables workspace hoisting and breaks RN resolution.
+
 ## Features
 
 - Email/password and guest authentication flows shared with the web app.
