@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ActivityIndicator, useColorScheme, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import LoginScreen from '../screens/LoginScreen';
+import RegisterScreen from '../screens/RegisterScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import QuestDetailScreen from '../screens/QuestDetailScreen';
 import SettingsScreen from '../screens/SettingsScreen';
@@ -11,6 +12,7 @@ import { Quest } from '../api/entities';
 
 export type RootStackParamList = {
   Login: undefined;
+  Register: undefined;
   Dashboard: undefined;
   QuestDetail: { quest: Quest };
   Settings: undefined;
@@ -26,6 +28,7 @@ const linking = {
       QuestDetail: 'quests/:id',
       Settings: 'settings',
       Login: 'login',
+      Register: 'register',
     },
   },
 };
@@ -66,11 +69,18 @@ const AppNavigator: React.FC = () => {
             />
           </>
         ) : (
-          <Stack.Screen
-            name="Login"
-            component={LoginScreen}
-            options={{ headerShown: false }}
-          />
+          <>
+            <Stack.Screen
+              name="Login"
+              component={LoginScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="Register"
+              component={RegisterScreen}
+              options={{ headerShown: false }}
+            />
+          </>
         )}
       </Stack.Navigator>
     </NavigationContainer>
