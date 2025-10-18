@@ -41,7 +41,7 @@ const LoginScreen: React.FC = () => {
   const disabled = busy || !email.trim() || !password;
 
   return (
-    <LinearGradient colors={['#0f172a', '#1e293b']} style={styles.container}>
+    <LinearGradient colors={['#f8fafc', '#e2e8f0']} style={styles.container}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.inner}
@@ -145,34 +145,36 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 40,
     fontWeight: '700',
-    color: '#f8fafc',
+    color: '#0f172a',
     letterSpacing: 1,
   },
   subtitle: {
     fontSize: 16,
-    color: '#cbd5f5',
+    color: '#475569',
     marginTop: 8,
   },
   form: {
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 24,
     gap: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   label: {
-    color: '#e2e8f0',
+    color: '#334155',
     fontWeight: '600',
     fontSize: 14,
   },
   input: {
-    backgroundColor: 'rgba(148, 163, 184, 0.2)',
-    color: '#f8fafc',
+    backgroundColor: '#f1f5f9',
+    color: '#0f172a',
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 10,
   },
   primaryButton: {
-    backgroundColor: '#38bdf8',
+    backgroundColor: '#2563eb',
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: 'center',
@@ -182,25 +184,27 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   primaryButtonText: {
-    color: '#0f172a',
+    color: '#ffffff',
     fontWeight: '700',
     fontSize: 16,
   },
   actionsCard: {
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 20,
     gap: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   secondaryButton: {
-    borderColor: '#38bdf8',
+    borderColor: '#2563eb',
     borderWidth: 1,
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
   },
   secondaryButtonText: {
-    color: '#38bdf8',
+    color: '#2563eb',
     fontWeight: '600',
     fontSize: 15,
   },
@@ -212,7 +216,7 @@ const styles = StyleSheet.create({
   divider: {
     flex: 1,
     height: 1,
-    backgroundColor: 'rgba(148, 163, 184, 0.3)',
+    backgroundColor: '#e2e8f0',
   },
   dividerLabel: {
     color: '#94a3b8',
@@ -228,15 +232,15 @@ const styles = StyleSheet.create({
   },
   socialButton: {
     flexBasis: '48%',
-    borderColor: 'rgba(148, 163, 184, 0.5)',
+    borderColor: '#e2e8f0',
     borderWidth: 1,
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.4)',
+    backgroundColor: '#f8fafc',
   },
   socialButtonText: {
-    color: '#e2e8f0',
+    color: '#1e293b',
     fontWeight: '600',
     fontSize: 14,
   },
