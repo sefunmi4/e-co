@@ -1,0 +1,23 @@
+diff --git a/node_modules/metro/package.json b/node_modules/metro/package.json
+index 7d25240..3c9dbf1 100644
+--- a/node_modules/metro/package.json
++++ b/node_modules/metro/package.json
+@@ -7,7 +7,10 @@
+   "exports": {
+     ".": "./src/index.js",
+     "./package.json": "./package.json",
+-    "./private/*": "./src/*.js"
++    "./private/*": "./src/*.js",
++    "./src": "./src/index.js",
++    "./src/*": "./src/*.js",
++    "./src/*.js": "./src/*.js"
+   },
+   "repository": {
+     "type": "git",
+@@ -79,4 +82,4 @@
+   "engines": {
+     "node": ">=20.19.4"
+   }
+-}
++}
+\ No newline at end of file
