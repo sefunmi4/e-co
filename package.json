@@ -19,9 +19,10 @@
     "mobile:start": "cd apps/mobile/ethos && npx expo start -c"
   },
   "devDependencies": {
-    "eslint": "^8.56.0",
-    "@typescript-eslint/parser": "^6.7.0",
     "@typescript-eslint/eslint-plugin": "^6.7.0",
+    "@typescript-eslint/parser": "^6.7.0",
+    "babel-plugin-module-resolver": "^5.0.2",
+    "eslint": "^8.56.0",
     "vitest": "^1.6.1"
   },
   "dependencies": {
