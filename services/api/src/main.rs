@@ -1,8 +1,9 @@
 mod search;
+mod verification;
 
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
-use axum::{routing::get, Json, Router};
+use axum::{routing::get, routing::post, Json, Router};
 use search::{FacetSummary, SearchError, SearchHit, SearchIndex, SearchRequest};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
@@ -11,10 +12,12 @@ use thiserror::Error;
 use tokio::net::TcpListener;
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
+use verification::{DeliveryChannel, LoggingCodeSender, VerificationConfig, VerificationService};
 
 #[derive(Clone)]
 struct AppState {
     search: Arc<SearchIndex>,
+    verification: VerificationService,
 }
 
 #[derive(Debug, Error)]
@@ -43,13 +46,24 @@ async fn main() -> Result<(), ApiError> {
 
     let index_path = std::env::var("ECO_INDEX_PATH").unwrap_or_default();
     let search = SearchIndex::open(index_path)?;
+    let verification_secret =
+        std::env::var("ECO_VERIFICATION_SECRET").unwrap_or_else(|_| "local-dev-secret".to_string());
+    let verification_sender = Arc::new(LoggingCodeSender::default());
+    let verification = VerificationService::new(
+        VerificationConfig::default(),
+        verification_secret.into_bytes(),
+        verification_sender,
+    );
     let state = AppState {
         search: Arc::new(search),
+        verification,
     };
 
     let app = Router::new()
         .route("/health", get(health))
         .route("/query", get(query))
+        .route("/auth/verification-code", post(request_code))
+        .route("/auth/verify", post(verify_code))
         .with_state(state);
 
     let addr: SocketAddr = std::env::var("ECO_API_ADDR")
@@ -121,6 +135,77 @@ async fn query(
     }
 }
 
+#[derive(Debug, Deserialize)]
+struct VerificationCodeRequest {
+    identifier: String,
+    channel: DeliveryChannel,
+    #[serde(default = "default_locale")]
+    locale: String,
+}
+
+#[derive(Debug, Serialize)]
+struct VerificationCodeResponse {
+    expires_in: u64,
+    retry_after: u64,
+}
+
+fn default_locale() -> String {
+    "en-US".to_string()
+}
+
+async fn request_code(
+    State(state): State<AppState>,
+    Json(payload): Json<VerificationCodeRequest>,
+) -> Result<Json<VerificationCodeResponse>, (StatusCode, String)> {
+    match state
+        .verification
+        .issue_code(&payload.identifier, payload.channel, &payload.locale)
+        .await
+    {
+        Ok(outcome) => Ok(Json(VerificationCodeResponse {
+            expires_in: outcome.expires_in.as_secs(),
+            retry_after: outcome.retry_after.as_secs(),
+        })),
+        Err(err) => {
+            let status = err.status_code();
+            Err((status, err.to_string()))
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct VerifyCodeRequest {
+    identifier: String,
+    channel: DeliveryChannel,
+    code: String,
+}
+
+#[derive(Debug, Serialize)]
+struct VerifyCodeResponse {
+    verified: bool,
+    remaining_attempts: u32,
+}
+
+async fn verify_code(
+    State(state): State<AppState>,
+    Json(payload): Json<VerifyCodeRequest>,
+) -> Result<Json<VerifyCodeResponse>, (StatusCode, String)> {
+    match state
+        .verification
+        .verify_code(&payload.identifier, payload.channel, &payload.code)
+        .await
+    {
+        Ok(outcome) => Ok(Json(VerifyCodeResponse {
+            verified: outcome.verified,
+            remaining_attempts: outcome.remaining_attempts,
+        })),
+        Err(err) => {
+            let status = err.status_code();
+            Err((status, err.to_string()))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -144,6 +229,11 @@ mod tests {
         let search_index = build_test_search_index();
         let state = AppState {
             search: Arc::new(search_index),
+            verification: VerificationService::new(
+                VerificationConfig::default(),
+                b"test-secret".to_vec(),
+                Arc::new(LoggingCodeSender::default()),
+            ),
         };
         let app = Router::new().route("/query", get(query)).with_state(state);
 

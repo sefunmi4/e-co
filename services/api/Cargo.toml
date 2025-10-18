@@ -17,6 +17,10 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 thiserror = "1.0"
 tantivy = { version = "0.20", default-features = false, features = ["mmap"] }
+async-trait = "0.1"
+rand = "0.8"
+hmac = "0.12"
+sha2 = "0.10"
 
 [patch.crates-io]
 zstd-safe = { path = "../../vendor/zstd-safe" }
