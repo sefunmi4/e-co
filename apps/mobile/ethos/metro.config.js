@@ -47,6 +47,27 @@ Module._resolveFilename = function patchedResolveFilename(request, parent, isMai
     return originalResolveFilename.call(this, 'metro/private/lib/TerminalReporter', parent, isMain, options);
   }
 
+  if (request === 'metro-transform-worker/src/utils/getMinifier') {
+    const packageJsonPath = originalResolveFilename.call(
+      this,
+      'metro-transform-worker/package.json',
+      parent,
+      isMain,
+      options,
+    );
+    const packageRoot = path.dirname(packageJsonPath);
+    const minifierJs = path.join(packageRoot, 'src/utils/getMinifier.js');
+    if (fs.existsSync(minifierJs)) {
+      return minifierJs;
+    }
+    const minifierTs = path.join(packageRoot, 'src/utils/getMinifier.ts');
+    if (fs.existsSync(minifierTs)) {
+      return minifierTs;
+    }
+
+    return originalResolveFilename.call(this, request, parent, isMain, options);
+  }
+
   if (shouldUseWorkspaceReactNative && request === 'react-native/package.json') {
     return workspaceReactNativePackageJson;
   }
