@@ -10,12 +10,25 @@
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "types": ["react", "react-native", "node"],
+    "types": [
+      "react",
+      "react-native",
+      "node"
+    ],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": [
+        "src/*"
+      ]
     }
   },
-  "include": ["src", "App.tsx"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "src",
+    "App.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "extends": "expo/tsconfig.base"
 }
