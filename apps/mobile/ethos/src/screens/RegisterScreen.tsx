@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -11,10 +11,8 @@ import {
   ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons'; // Expo includes @expo/vector-icons
-import { useAuth } from '../context/AuthContext';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 
 const Divider = () => (
@@ -25,13 +23,7 @@ const Divider = () => (
   </View>
 );
 
-type Social =
-  | 'Apple'
-  | 'Google'
-  | 'GitHub'
-  | 'Instagram'
-  | 'Twitter'
-  | 'Facebook';
+type Social = 'Apple' | 'Google' | 'GitHub' | 'Instagram' | 'Twitter' | 'Facebook';
 
 const ICON: Record<Social, keyof typeof Ionicons.glyphMap> = {
   Apple: 'logo-apple',
@@ -51,14 +43,9 @@ const SocialButton = ({
   onPress: () => void;
   disabled?: boolean;
 }) => (
-  <TouchableOpacity
-    style={styles.listButton}
-    activeOpacity={0.8}
-    onPress={onPress}
-    disabled={disabled}
-  >
+  <TouchableOpacity style={styles.listButton} activeOpacity={0.8} onPress={onPress} disabled={disabled}>
     {label === 'Use phone or email' ? (
-      <Ionicons name="person-outline" size={20} color="#111827" />
+      <Ionicons name="person-add-outline" size={20} color="#111827" />
     ) : (
       <Ionicons name={ICON[label as Social]} size={20} color="#111827" />
     )}
@@ -69,71 +56,68 @@ const SocialButton = ({
   </TouchableOpacity>
 );
 
-const LoginScreen: React.FC = () => {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList, 'Login'>>();
-  const { signIn } = useAuth();
+type Props = NativeStackScreenProps<RootStackParamList, 'Register'>;
+
+const RegisterScreen: React.FC<Props> = ({ navigation }) => {
+  const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  const disabled = busy || !email.trim() || !password;
-
-  const handleLogin = async () => {
-    setBusy(true);
-    try {
-      await signIn(email.trim(), password);
-    } catch (e) {
-      console.error(e);
-      Alert.alert('Unable to sign in', 'Check your credentials and try again.');
-    } finally {
-      setBusy(false);
+  const disabled = useMemo(() => {
+    if (busy) return true;
+    if (!displayName.trim() || !email.trim() || !password || !confirmPassword) {
+      return true;
     }
+    if (password !== confirmPassword) {
+      return true;
+    }
+    if (password.length < 8) {
+      return true;
+    }
+    return false;
+  }, [busy, displayName, email, password, confirmPassword]);
+
+  const handleSocial = (provider: Social) => {
+    Alert.alert(`Continue with ${provider}`, 'Single sign-on is coming soon.');
   };
 
-  const handleRegister = () => {
-    navigation.navigate('Register');
-  };
-
-  const handleSSO = (provider: Social) => {
-    Alert.alert(`Sign in with ${provider}`, 'Single sign-on is coming soon.');
+  const handleSubmit = () => {
+    setBusy(true);
+    Alert.alert('Create an account', 'Registration is not yet available in this preview build.', [
+      {
+        text: 'OK',
+        onPress: () => setBusy(false),
+      },
+    ]);
   };
 
   return (
-    <LinearGradient colors={['#ffffff', '#f3f4f6']} style={styles.container}>
+    <LinearGradient colors={["#ffffff", "#f3f4f6"]} style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
-          bounces={false}
-        >
-          {/* Header */}
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" bounces={false}>
           <View style={styles.header}>
             <Text style={styles.brand}>Ethos</Text>
             <Text style={styles.tagline}>Guild quests on the go.</Text>
           </View>
 
-          {/* Big stacked action list – TikTok-style */}
           {!showForm && (
             <View style={styles.card}>
-              <SocialButton
-                label="Use phone or email"
-                onPress={() => setShowForm(true)}
-                disabled={busy}
-              />
-              <SocialButton label="Apple" onPress={() => handleSSO('Apple')} disabled={busy} />
-              <SocialButton label="Google" onPress={() => handleSSO('Google')} disabled={busy} />
-              <SocialButton label="GitHub" onPress={() => handleSSO('GitHub')} disabled={busy} />
-              <SocialButton label="Instagram" onPress={() => handleSSO('Instagram')} disabled={busy} />
-              <SocialButton label="Facebook" onPress={() => handleSSO('Facebook')} disabled={busy} />
+              <SocialButton label="Use phone or email" onPress={() => setShowForm(true)} disabled={busy} />
+              <SocialButton label="Apple" onPress={() => handleSocial('Apple')} disabled={busy} />
+              <SocialButton label="Google" onPress={() => handleSocial('Google')} disabled={busy} />
+              <SocialButton label="GitHub" onPress={() => handleSocial('GitHub')} disabled={busy} />
+              <SocialButton label="Instagram" onPress={() => handleSocial('Instagram')} disabled={busy} />
+              <SocialButton label="Facebook" onPress={() => handleSocial('Facebook')} disabled={busy} />
               <Divider />
-              <TouchableOpacity style={styles.ghostButton} onPress={handleRegister} disabled={busy}>
-                <Text style={styles.ghostButtonText}>Register as a new user</Text>
+              <TouchableOpacity style={styles.ghostButton} onPress={() => navigation.navigate('Login')} disabled={busy}>
+                <Text style={styles.ghostButtonText}>I already have an account</Text>
               </TouchableOpacity>
             </View>
           )}
 
-          {/* Inline email/password panel that slides in when chosen */}
           {showForm && (
             <View style={styles.card}>
               <View style={styles.formHeaderRow}>
@@ -143,6 +127,16 @@ const LoginScreen: React.FC = () => {
                 <Text style={styles.formTitle}>Use phone or email</Text>
                 <View style={{ width: 22 }} />
               </View>
+
+              <Text style={styles.label}>Display name</Text>
+              <TextInput
+                value={displayName}
+                onChangeText={setDisplayName}
+                placeholder="Adventurer"
+                placeholderTextColor="#9ca3af"
+                style={styles.input}
+                returnKeyType="next"
+              />
 
               <Text style={styles.label}>Email</Text>
               <TextInput
@@ -161,31 +155,41 @@ const LoginScreen: React.FC = () => {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
-                placeholder="••••••••"
+                placeholder="Create a strong password"
+                placeholderTextColor="#9ca3af"
+                style={styles.input}
+                returnKeyType="next"
+              />
+
+              <Text style={styles.label}>Confirm password</Text>
+              <TextInput
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry
+                placeholder="Repeat your password"
                 placeholderTextColor="#9ca3af"
                 style={styles.input}
                 returnKeyType="done"
-                onSubmitEditing={handleLogin}
+                onSubmitEditing={disabled ? undefined : handleSubmit}
               />
 
               <TouchableOpacity
                 style={[styles.primaryButton, disabled && styles.disabled]}
-                onPress={handleLogin}
+                onPress={handleSubmit}
                 disabled={disabled}
                 activeOpacity={0.9}
               >
-                <Text style={styles.primaryText}>{busy ? 'Signing in…' : 'Sign in'}</Text>
+                <Text style={styles.primaryText}>{busy ? 'Creating account…' : 'Create account'}</Text>
               </TouchableOpacity>
 
               <Divider />
 
-              <TouchableOpacity style={styles.ghostButton} onPress={handleRegister} disabled={busy}>
-                <Text style={styles.ghostButtonText}>Register as a new user</Text>
+              <TouchableOpacity style={styles.ghostButton} onPress={() => navigation.navigate('Login')} disabled={busy}>
+                <Text style={styles.ghostButtonText}>I already have an account</Text>
               </TouchableOpacity>
             </View>
           )}
 
-          {/* Legal */}
           <Text style={styles.legal}>
             By continuing, you agree to Ethos’s Terms of Service and acknowledge our Privacy Policy.
           </Text>
@@ -208,7 +212,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   tagline: { marginTop: 6, fontSize: 16, color: '#475569' },
-
   card: {
     backgroundColor: '#fff',
     borderRadius: RADIUS,
@@ -217,8 +220,6 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 12,
   },
-
-  // TikTok-like tall list buttons
   listButton: {
     height: 52,
     borderRadius: RADIUS,
@@ -237,8 +238,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
-
-  // Inline form
   formHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -266,7 +265,6 @@ const styles = StyleSheet.create({
   },
   primaryText: { color: '#fff', fontWeight: '800', fontSize: 16 },
   disabled: { opacity: 0.6 },
-
   ghostButton: {
     height: 48,
     borderRadius: RADIUS,
@@ -276,7 +274,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   ghostButtonText: { color: '#2563eb', fontWeight: '700' },
-
   dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -291,7 +288,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     fontSize: 11,
   },
-
   legal: {
     textAlign: 'center',
     color: '#9ca3af',
@@ -300,4 +296,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default LoginScreen;
+export default RegisterScreen;
