@@ -3,8 +3,17 @@ const path = require('path');
 
 const projectRoot = path.resolve(__dirname, '..');
 const visitedNodeModules = new Set();
-const packageDirsToVisit = [projectRoot];
-const packageJsonPaths = [];
+const initialDirs = new Set([projectRoot]);
+
+let currentDir = projectRoot;
+for (let i = 0; i < 3; i += 1) {
+  currentDir = path.dirname(currentDir);
+  initialDirs.add(currentDir);
+}
+
+const packageDirsToVisit = Array.from(initialDirs);
+const packageJsonTargets = [];
+const targetPackages = ['metro-cache', 'metro-transform-worker'];
 
 while (packageDirsToVisit.length > 0) {
   const packageDir = packageDirsToVisit.pop();
@@ -16,9 +25,11 @@ while (packageDirsToVisit.length > 0) {
 
   visitedNodeModules.add(nodeModulesDir);
 
-  const metroCachePackageJson = path.join(nodeModulesDir, 'metro-cache', 'package.json');
-  if (fs.existsSync(metroCachePackageJson)) {
-    packageJsonPaths.push(metroCachePackageJson);
+  for (const packageName of targetPackages) {
+    const packageJsonPath = path.join(nodeModulesDir, packageName, 'package.json');
+    if (fs.existsSync(packageJsonPath)) {
+      packageJsonTargets.push({ packageName, packageJsonPath });
+    }
   }
 
   for (const entry of fs.readdirSync(nodeModulesDir, { withFileTypes: true })) {
@@ -40,8 +51,8 @@ while (packageDirsToVisit.length > 0) {
   }
 }
 
-if (packageJsonPaths.length === 0) {
-  console.warn('metro-cache package.json not found, skipping export patch');
+if (packageJsonTargets.length === 0) {
+  console.warn('Metro package.json files not found, skipping export patch');
   process.exit(0);
 }
 
@@ -53,7 +64,7 @@ const exportMappings = {
 
 let modifiedCount = 0;
 
-for (const packageJsonPath of packageJsonPaths) {
+for (const { packageName, packageJsonPath } of packageJsonTargets) {
   const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
   const exportsField = packageJson.exports ?? {};
   let changed = false;
@@ -69,10 +80,10 @@ for (const packageJsonPath of packageJsonPaths) {
     packageJson.exports = exportsField;
     fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
     modifiedCount += 1;
-    console.info(`Patched metro-cache@${packageJson.version} exports at ${packageJsonPath}`);
+    console.info(`Patched ${packageName}@${packageJson.version} exports at ${packageJsonPath}`);
   }
 }
 
 if (modifiedCount === 0) {
-  console.info('metro-cache exports already include src mappings');
+  console.info('Metro exports already include src mappings');
 }
